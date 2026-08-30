@@ -8,10 +8,21 @@ When you buy USDT, create a *second* API key (`Read + Trade`, withdraw off). Do 
 
 Needs the `okx` CLI (`@okx_ai/okx-trade-cli`) on PATH.
 
+## Cloud (PC éteint)
+
+GitHub Actions scanne BTC/ETH toutes les 10 minutes et publie le blotter :
+
+https://yugztrying.github.io/okx-ict-paper/
+
+Toujours paper. Aucun ordre. Tu peux éteindre l’ordi.
+
+## Local (optionnel)
+
 ```bash
 python paper.py              # one scan BTC + ETH
 python paper.py --loop 10    # every 10 minutes
 python paper.py --status     # journal stats
+python dashboard.py          # phone blotter on http://<LAN>:8787
 ```
 
 ## 6/6 or nothing

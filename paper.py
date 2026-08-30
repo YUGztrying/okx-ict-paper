@@ -10,7 +10,7 @@ import tomllib
 from datetime import datetime, timezone
 from pathlib import Path
 
-from ict.journal import append, consecutive_losses, load_open, save_open, stats
+from ict.journal import append, consecutive_losses, load_open, save_open, stats, write_desk
 from ict.model import Fiche, analyze
 from ict.okx_data import fetch_candles, fetch_last
 
@@ -178,6 +178,7 @@ def main() -> int:
             except Exception as exc:
                 print(f"{inst}: error {exc}", file=sys.stderr)
                 append({"type": "error", "inst_id": inst, "error": str(exc)})
+        write_desk()
 
     tick()
     if args.loop:

@@ -83,3 +83,47 @@ def stats() -> dict[str, Any]:
         "avg_r": (r_sum / r_n) if r_n else None,
         "open": load_open(),
     }
+
+
+def _parse_lines() -> list[dict[str, Any]]:
+    if not RUNS.exists():
+        return []
+    events: list[dict[str, Any]] = []
+    for line in RUNS.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            events.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return events
+
+
+def snapshot(limit: int = 40) -> dict[str, Any]:
+    events = _parse_lines()
+    latest: dict[str, Any] = {}
+    for event in reversed(events):
+        inst = event.get("inst_id")
+        if inst and inst not in latest and event.get("type") != "error":
+            latest[inst] = event
+        if len(latest) >= 8:
+            break
+    feed = list(reversed(events[-limit:]))
+    last_scan = events[-1]["logged_at"] if events else None
+    return {
+        "mode": "paper",
+        "generated_at": _now(),
+        "last_scan": last_scan,
+        "stats": stats(),
+        "open": load_open(),
+        "latest": latest,
+        "feed": feed,
+    }
+
+
+def write_desk(path: Path | None = None) -> Path:
+    dest = path or (ROOT / "dashboard" / "desk.json")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(json.dumps(snapshot(), ensure_ascii=False, indent=2), encoding="utf-8")
+    return dest

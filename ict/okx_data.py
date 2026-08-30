@@ -1,20 +1,12 @@
 from __future__ import annotations
 
 import json
-import shutil
-import subprocess
+import urllib.error
+import urllib.parse
+import urllib.request
 from dataclasses import dataclass
-from pathlib import Path
 
-
-def _okx_cmd() -> str:
-    found = shutil.which("okx")
-    if found:
-        return found
-    cmd = Path.home() / "AppData" / "Roaming" / "npm" / "okx.cmd"
-    if cmd.exists():
-        return str(cmd)
-    raise RuntimeError("okx CLI not found. Install @okx_ai/okx-trade-cli and ensure it is on PATH.")
+OKX = "https://www.okx.com/api/v5"
 
 
 @dataclass(frozen=True)
@@ -27,16 +19,22 @@ class Candle:
     volume: float
 
 
+def _get(path: str, params: dict[str, str]) -> dict:
+    query = urllib.parse.urlencode(params)
+    url = f"{OKX}{path}?{query}"
+    req = urllib.request.Request(url, headers={"User-Agent": "okx-ict-paper/1.0", "Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=25) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"OKX request failed {url}: {exc}") from exc
+    if str(payload.get("code")) != "0":
+        raise RuntimeError(f"OKX error {payload.get('code')}: {payload.get('msg')} ({url})")
+    return payload
+
+
 def fetch_candles(inst_id: str, bar: str, limit: int) -> list[Candle]:
-    result = subprocess.run(
-        [_okx_cmd(), "market", "candles", inst_id, "--bar", bar, "--limit", str(limit), "--json"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(f"okx candles failed for {inst_id} {bar}: {result.stderr or result.stdout}")
-    raw = json.loads(result.stdout)
+    payload = _get("/market/candles", {"instId": inst_id, "bar": bar, "limit": str(limit)})
     candles = [
         Candle(
             ts=int(row[0]),
@@ -46,22 +44,15 @@ def fetch_candles(inst_id: str, bar: str, limit: int) -> list[Candle]:
             close=float(row[4]),
             volume=float(row[5]),
         )
-        for row in raw
+        for row in payload.get("data") or []
     ]
     candles.sort(key=lambda c: c.ts)
     return candles
 
 
 def fetch_last(inst_id: str) -> float:
-    result = subprocess.run(
-        [_okx_cmd(), "market", "ticker", inst_id, "--json"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(f"okx ticker failed for {inst_id}: {result.stderr or result.stdout}")
-    data = json.loads(result.stdout)
-    if isinstance(data, list):
-        data = data[0]
-    return float(data.get("last") or data.get("lastPx") or data["last"])
+    payload = _get("/market/ticker", {"instId": inst_id})
+    rows = payload.get("data") or []
+    if not rows:
+        raise RuntimeError(f"no ticker for {inst_id}")
+    return float(rows[0]["last"])

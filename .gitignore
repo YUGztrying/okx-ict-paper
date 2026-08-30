@@ -1,6 +1,4 @@
 __pycache__/
 .venv/
 .pytest_cache/
-journal/*.jsonl
-journal/open.json
 *.pyc

@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#082226" />
+  <title>Desk paper</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --pit: #082226;
+      --pit-2: #0d3338;
+      --ink: #e6efe8;
+      --mute: #8aa39a;
+      --line: #1d4a4f;
+      --watch: #f0e14a;
+      --sell: #e59aaf;
+      --buy: #7dffb3;
+      --warn: #ffb35c;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: var(--pit); color: var(--ink); }
+    body {
+      font-family: "IBM Plex Sans", sans-serif;
+      padding: calc(18px + env(safe-area-inset-top)) 16px calc(72px + env(safe-area-inset-bottom));
+    }
+    .clip {
+      width: 42px; height: 10px; margin: 0 auto 10px;
+      background: #c9a24a; border-radius: 2px 2px 1px 1px;
+      box-shadow: 0 2px 0 #6d5420;
+    }
+    .badge {
+      border-radius: 6px;
+      padding: 22px 18px 18px;
+      text-align: center;
+      color: #10140f;
+      transition: background .25s ease;
+    }
+    .badge.stand { background: var(--sell); }
+    .badge.open { background: var(--buy); }
+    .badge.idle { background: var(--watch); }
+    .badge .kicker {
+      font-family: "Share Tech Mono", monospace;
+      font-size: 11px;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+    }
+    .badge h1 {
+      font-family: "Chakra Petch", sans-serif;
+      font-weight: 700;
+      font-size: clamp(40px, 12vw, 56px);
+      line-height: .9;
+      margin: 8px 0 6px;
+      letter-spacing: -0.03em;
+    }
+    .badge p { margin: 0; font-size: 14px; }
+    .meta {
+      display: flex; justify-content: space-between; gap: 8px;
+      margin: 18px 2px 8px;
+      font-family: "Share Tech Mono", monospace;
+      font-size: 11px; color: var(--mute); letter-spacing: .06em;
+    }
+    .pair {
+      background: var(--pit-2);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 14px 12px;
+      margin-bottom: 10px;
+    }
+    .pair header {
+      display: flex; justify-content: space-between; align-items: baseline;
+    }
+    .pair h2 {
+      font-family: "Chakra Petch", sans-serif;
+      font-size: 22px; margin: 0; letter-spacing: .02em;
+    }
+    .px { font-family: "Share Tech Mono", monospace; font-size: 18px; }
+    .frac {
+      font-family: "Chakra Petch", sans-serif;
+      font-size: 28px; margin: 10px 0 6px;
+    }
+    .frac span { color: var(--mute); font-size: 16px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip {
+      font-family: "Share Tech Mono", monospace;
+      font-size: 11px;
+      padding: 4px 7px;
+      border-radius: 3px;
+      background: #12383d;
+      color: var(--mute);
+    }
+    .chip.ok { color: var(--buy); background: #11382c; }
+    .chip.no { color: var(--sell); background: #3a1c28; }
+    .pos {
+      margin-top: 10px;
+      font-family: "Share Tech Mono", monospace;
+      font-size: 12px;
+      color: var(--buy);
+      line-height: 1.5;
+    }
+    .tape, .lex { margin-top: 22px; }
+    .tape h3, .lex h3 {
+      font-family: "Share Tech Mono", monospace;
+      font-size: 11px; letter-spacing: .16em; text-transform: uppercase;
+      color: var(--mute); font-weight: 400; margin: 0 0 10px;
+    }
+    .row {
+      display: grid;
+      grid-template-columns: 64px 72px 1fr;
+      gap: 8px;
+      padding: 9px 0;
+      border-top: 1px dashed var(--line);
+      font-size: 13px;
+    }
+    .row .t { font-family: "Share Tech Mono", monospace; color: var(--mute); font-size: 11px; }
+    .row .s { font-family: "Chakra Petch", sans-serif; text-transform: uppercase; }
+    .row .s.fill { color: var(--buy); }
+    .row .s.close-win { color: var(--buy); }
+    .row .s.close-loss { color: var(--sell); }
+    .row .s.error { color: var(--warn); }
+    .row .d { color: var(--ink); }
+    .empty { color: var(--mute); font-size: 14px; padding: 20px 0; }
+    .lex details {
+      background: var(--pit-2);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 0 14px;
+      margin-bottom: 8px;
+    }
+    .lex summary {
+      font-family: "Chakra Petch", sans-serif;
+      font-size: 16px;
+      padding: 12px 0;
+      cursor: pointer;
+      list-style: none;
+    }
+    .lex summary::-webkit-details-marker { display: none; }
+    .lex summary::after {
+      content: "+";
+      float: right;
+      color: var(--mute);
+      font-family: "Share Tech Mono", monospace;
+    }
+    .lex details[open] summary::after { content: "–"; }
+    .lex dl { margin: 0 0 14px; }
+    .lex dt {
+      font-family: "Share Tech Mono", monospace;
+      font-size: 12px;
+      color: var(--watch);
+      margin-top: 12px;
+    }
+    .lex dd {
+      margin: 4px 0 0;
+      font-size: 14px;
+      line-height: 1.45;
+      color: var(--ink);
+    }
+    button.refresh {
+      position: fixed;
+      right: 16px;
+      bottom: calc(16px + env(safe-area-inset-bottom));
+      border: 0;
+      background: var(--watch);
+      color: #10140f;
+      font-family: "Chakra Petch", sans-serif;
+      font-size: 14px;
+      padding: 12px 16px;
+      border-radius: 999px;
+      z-index: 2;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .badge { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="clip" aria-hidden="true"></div>
+  <section class="badge idle" id="badge">
+    <div class="kicker" id="kicker">PAPER · OKX · ICT 2022</div>
+    <h1 id="stamp">…</h1>
+    <p id="sub">Chargement du blotter</p>
+  </section>
+
+  <div class="meta">
+    <span id="clock">—</span>
+    <span id="scan">pas encore de scan</span>
+  </div>
+  <div id="pairs"></div>
+
+  <section class="tape">
+    <h3>Tape</h3>
+    <div id="tape"></div>
+  </section>
+
+  <section class="lex" id="lexique">
+    <h3>Lexique</h3>
+
+    <details open>
+      <summary>Sur le blotter</summary>
+      <dl>
+        <dt>Paper</dt>
+        <dd>On fait semblant. Le desk note le trade, l’argent ne bouge pas. Aucun ordre n’est envoyé à OKX.</dd>
+        <dt>Stand down</dt>
+        <dd>On ne prend rien. Au moins une des 6 conditions manque. C’est le cas normal — pas un bug.</dd>
+        <dt>In paper / fill</dt>
+        <dd>Les 6 conditions sont vertes : le desk « entre » en papier (prix d’entrée, stop, cible). Toujours fictif.</dd>
+        <dt>6/6</dt>
+        <dd>Les six feux doivent être verts ensemble. 5/6 = on passe. Pas de « presque ».</dd>
+        <dt>Veto</dt>
+        <dd>Un filtre a dit non. Dans le tape, c’est un stand down.</dd>
+        <dt>Tape</dt>
+        <dd>Le fil d’événements : chaque scan, chaque veto, chaque fill, chaque sortie. Comme un ticker.</dd>
+        <dt>Scan</dt>
+        <dd>Un passage du robot sur BTC et ETH. Toutes les 10 min si la loop tourne.</dd>
+      </dl>
+    </details>
+
+    <details>
+      <summary>Les 6 filtres</summary>
+      <dl>
+        <dt>htf bias</dt>
+        <dd>Direction du marché sur les gros graphiques (semaine + jour). Long = on ne cherche qu’à acheter. Short = seulement vendre. S’ils ne sont pas d’accord → stand down.</dd>
+        <dt>draw</dt>
+        <dd>Où le prix « doit » aller chercher de la liquidité : un vieux haut ou un vieux bas bien visible. C’est la cible du trade, pas l’entrée.</dd>
+        <dt>amd</dt>
+        <dd>Les 3 phases d’une séance : Accumulation (ça range), Manipulation (faux mouvement pour piéger), Delivery (le vrai mouvement). On n’entre qu’en delivery, après le piège.</dd>
+        <dt>session</dt>
+        <dd>Est-ce une heure où il y a du monde ? Asie, Londres, New York = ok. Dead zone (creux, souvent soir Abidjan) = veto. Score trop bas = on ne trade pas.</dd>
+        <dt>pd array</dt>
+        <dd>La zone précise d’entrée. Ici : un FVG (trou de prix) sur le graphique 15 minutes, du bon côté (pas trop cher pour un long, pas trop bon marché pour un short).</dd>
+        <dt>risk</dt>
+        <dd>Le trade doit rapporter au moins 2 fois ce qu’on risque (R:R ≥ 2). Pas déjà en position. Pas 5 pertes d’affilée.</dd>
+      </dl>
+    </details>
+
+    <details>
+      <summary>Acheter, vendre, sortir</summary>
+      <dl>
+        <dt>Long</dt>
+        <dd>On achète en espérant que ça monte. On gagne si le prix monte.</dd>
+        <dt>Short</dt>
+        <dd>On vend d’abord (ou un perp à la baisse) en espérant que ça baisse. On gagne si le prix descend.</dd>
+        <dt>Entrée</dt>
+        <dd>Le prix auquel on « prend » la position paper.</dd>
+        <dt>SL — stop loss</dt>
+        <dd>Le niveau où on coupe : « si ça va jusque-là, j’avais tort, je sors pour limiter la casse. »</dd>
+        <dt>TP — take profit</dt>
+        <dd>La cible. Si le prix arrive là, le paper est gagnant et on sort.</dd>
+        <dt>R:R / R</dt>
+        <dd>Combien on vise par rapport à ce qu’on risque. Risquer 100 pour viser 200 = R:R 2. Un gain de « 2R » = deux fois le risque. Une perte = −1R.</dd>
+        <dt>Session (clôturer le jour même)</dt>
+        <dd>Pas un swing de plusieurs jours. On prend dans la journée, on vise de sortir dans la journée.</dd>
+      </dl>
+    </details>
+
+    <details>
+      <summary>ICT, en français</summary>
+      <dl>
+        <dt>ICT</dt>
+        <dd>Inner Circle Trader — la méthode de Michael Huddleston. Une lecture « smart money » : on cherche où les gros ont posé des ordres, pas un indicateur magique.</dd>
+        <dt>HTF</dt>
+        <dd>Higher time frame : les unités de temps larges (semaine, jour). On décide la direction là, on entre sur le 15 minutes.</dd>
+        <dt>Biais</dt>
+        <dd>Le sens du jour : haussier (long) ou baissier (short). Sans biais clair, on ne trade pas.</dd>
+        <dt>Liquidité</dt>
+        <dd>Les stops des autres. Ils s’accumulent au-dessus des sommets égaux et sous les creux égaux. Le prix y va souvent les chercher avant le vrai mouvement.</dd>
+        <dt>PDH / PDL</dt>
+        <dd>Previous Day High / Low : le plus haut et le plus bas de la veille (journée New York). Aimants à liquidité.</dd>
+        <dt>PWH / PWL</dt>
+        <dd>Pareil, mais pour la semaine dernière.</dd>
+        <dt>Equal highs / lows</dt>
+        <dd>Deux (ou plus) sommets ou creux au même prix. Les stops s’alignent juste derrière. On les utilise souvent comme draw.</dd>
+        <dt>Sweep / Judas</dt>
+        <dd>Le prix casse un bas ou un haut (les stops sautent) puis revient. C’est le piège — la manipulation. On n’achète pas ce premier mouvement.</dd>
+        <dt>Displacement</dt>
+        <dd>Après le sweep, une grosse bougie dans l’autre sens. Ça confirme que la delivery commence.</dd>
+        <dt>FVG</dt>
+        <dd>Fair Value Gap : un trou entre trois bougies, le prix a sauté trop vite. Il revient souvent combler ce trou — c’est notre zone d’entrée.</dd>
+        <dt>Discount / premium</dt>
+        <dd>En dessous de la moitié de la range = discount (bon pour un long). Au-dessus = premium (bon pour un short). On n’achète pas trop cher.</dd>
+        <dt>Asie / Londres / NY</dt>
+        <dd>Les trois séances où le volume tourne. En Côte d’Ivoire (GMT) : Asie la nuit, Londres le matin, New York l’après-midi. NY est souvent la plus propre pour ce modèle.</dd>
+        <dt>Dead zone</dt>
+        <dd>Heures creuses. Peu de volume, beaucoup de bruit. Le desk refuse de trader.</dd>
+        <dt>Silver Bullet</dt>
+        <dd>Le modèle ICT le plus mécanique : une petite fenêtre (souvent 1h à NY), un sweep, un FVG. C’est la base de ce desk.</dd>
+      </dl>
+    </details>
+
+    <details>
+      <summary>OKX / crypto, vite fait</summary>
+      <dl>
+        <dt>USDT</dt>
+        <dd>Un stablecoin, 1 USDT ≈ 1 dollar. C’est l’argent de départ sur OKX pour acheter du BTC ou de l’ETH.</dd>
+        <dt>BTC-USDT / ETH-USDT</dt>
+        <dd>Le couple : tu achètes du Bitcoin (ou Ether) avec des USDT. C’est ce que le desk surveille.</dd>
+        <dt>Spot</dt>
+        <dd>Acheter vraiment la crypto. Pas de levier. C’est ce qu’on lit aujourd’hui.</dd>
+        <dt>Perp</dt>
+        <dd>Contrat perpétuel : on peut shorter facilement, avec du levier. Plus tard, pas maintenant. Plus risqué.</dd>
+        <dt>Clé API Lire</dt>
+        <dd>La clé <em>cursor</em> actuelle : elle peut voir, pas trader. Le blotter n’a même pas besoin d’elle (marché public).</dd>
+      </dl>
+    </details>
+  </section>
+  <button class="refresh" type="button" id="reload">Actualiser</button>
+
+  <script>
+    const CHECKS = ["htf_bias", "draw", "amd", "session", "pd_array", "risk"];
+
+    const fmtTime = (iso) => {
+      if (!iso) return "—";
+      const d = new Date(iso);
+      return d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Africa/Abidjan" }) + " ABI";
+    };
+
+    const passedCount = (event) => {
+      const missing = event.missing || [];
+      return Math.max(0, 6 - missing.length);
+    };
+
+    const reasonsMap = (event) => {
+      const map = {};
+      (event.reasons || []).forEach((line) => {
+        const i = line.indexOf(":");
+        if (i > 0) map[line.slice(0, i)] = line.slice(i + 1).trim();
+      });
+      return map;
+    };
+
+    function render(data) {
+      const open = data.open || {};
+      const latest = data.latest || {};
+      const openCount = Object.keys(open).length;
+      const badge = document.getElementById("badge");
+      const stamp = document.getElementById("stamp");
+      const sub = document.getElementById("sub");
+      const s = data.stats || {};
+
+      if (openCount) {
+        badge.className = "badge open";
+        stamp.textContent = "IN PAPER";
+        sub.textContent = Object.keys(open).join(" · ") + " — session, close today";
+      } else {
+        badge.className = "badge stand";
+        stamp.textContent = "STAND DOWN";
+        sub.textContent = (s.stand_downs || 0) + " veto · " + (s.fills || 0) + " fills · 6/6 only";
+      }
+
+      document.getElementById("clock").textContent = fmtTime(data.generated_at);
+      document.getElementById("scan").textContent = data.last_scan
+        ? "scan " + fmtTime(data.last_scan)
+        : "aucun scan";
+
+      const pairs = ["BTC-USDT", "ETH-USDT"];
+      document.getElementById("pairs").innerHTML = pairs.map((id) => {
+        const ev = latest[id];
+        const pos = open[id];
+        if (!ev && !pos) {
+          return `<article class="pair"><header><h2>${id.replace("-USDT","")}</h2></header><p class="empty">Pas encore de fiche.</p></article>`;
+        }
+        const n = ev ? passedCount(ev) : 6;
+        const reasons = ev ? reasonsMap(ev) : {};
+        const missing = new Set(ev?.missing || []);
+        const chips = CHECKS.map((c) => {
+          const ok = ev ? !missing.has(c) : true;
+          return `<span class="chip ${ok ? "ok" : "no"}">${c.replace("_", " ")}</span>`;
+        }).join("");
+        const posHtml = pos
+          ? `<div class="pos">${pos.bias} @ ${Number(pos.entry).toFixed(2)}<br>SL ${Number(pos.stop).toFixed(2)} → TP ${Number(pos.target).toFixed(2)} · R ${Number(pos.rr).toFixed(2)}</div>`
+          : "";
+        const px = ev?.last != null ? Number(ev.last).toLocaleString("en-US") : "—";
+        const bias = ev?.bias || pos?.bias || "—";
+        return `<article class="pair">
+          <header><h2>${id.replace("-USDT","")}</h2><span class="px">${px}</span></header>
+          <div class="frac">${n}<span>/6</span> ${bias}</div>
+          <div class="chips">${chips}</div>
+          ${posHtml}
+        </article>`;
+      }).join("");
+
+      const feed = data.feed || [];
+      document.getElementById("tape").innerHTML = feed.length
+        ? feed.slice(0, 24).map((ev) => {
+            const kind = ev.type === "paper_close" ? `close-${ev.result}` : ev.type;
+            const label = ev.type === "stand_down" ? "veto"
+              : ev.type === "paper_fill" ? "fill"
+              : ev.type === "paper_close" ? ev.result
+              : ev.type || "—";
+            const detail = ev.missing?.length
+              ? ev.missing.join(" · ")
+              : ev.position?.bias
+                ? `${ev.position.bias} ${Number(ev.position.entry || 0).toFixed(1)}`
+                : ev.error || ev.bias || "";
+            return `<div class="row">
+              <div class="t">${fmtTime(ev.logged_at)}</div>
+              <div class="s ${kind}">${(ev.inst_id || "").replace("-USDT","")}</div>
+              <div class="d">${label} ${detail}</div>
+            </div>`;
+          }).join("")
+        : `<p class="empty">Le tape est vide. Lance <code>python paper.py</code>.</p>`;
+    }
+
+    async function load() {
+      let data = null;
+      for (const url of ["/api/desk", "desk.json"]) {
+        try {
+          const res = await fetch(url, { cache: "no-store" });
+          if (res.ok) {
+            data = await res.json();
+            break;
+          }
+        } catch (_) { /* local API missing when hosted */ }
+      }
+      if (!data) throw new Error("desk unreachable");
+      render(data);
+    }
+
+    document.getElementById("reload").addEventListener("click", load);
+    load();
+    setInterval(load, 10000);
+  </script>
+</body>
+</html>
