@@ -1,0 +1,19 @@
+# Paper desk — no live orders. Ever.
+default_equity_usdt = 10000.0
+risk_pct = 0.5
+min_rr = 2.0
+session_min_score = 3
+max_consecutive_losses = 5
+one_position_per_asset = true
+
+instruments = ["BTC-USDT", "ETH-USDT"]
+
+# OKX 15m FVG is the entry timeframe. HTF is NY daily + weekly.
+entry_bar = "15m"
+htf_bar = "1H"
+htf_limit = 240
+entry_limit = 96
+
+# Dead zone (UTC) is a hard veto. CI = GMT year-round.
+# Asia 00-08 score 3 | London 07-11 score 4 | NY 13-16 score 5
+loop_minutes = 10
