@@ -23,16 +23,34 @@
       --nav: #141518;
     }
     * { box-sizing: border-box; }
-    html, body { margin: 0; background: var(--bg); color: var(--text); }
-    body {
-      font-family: Inter, system-ui, sans-serif;
+    html, body { margin: 0; background: #070708; color: var(--text); min-height: 100%; }
+    body { font-family: Inter, system-ui, sans-serif; padding: 0; }
+    .phone {
+      max-width: 430px;
+      margin: 0 auto;
+      min-height: 100dvh;
+      background: var(--bg);
       padding: calc(12px + env(safe-area-inset-top)) 16px calc(92px + env(safe-area-inset-bottom));
     }
-    header.bar {
-      display: flex; align-items: center; justify-content: space-between;
-      gap: 8px; flex-wrap: wrap; margin-bottom: 18px;
+    header.topbar {
+      display: grid;
+      grid-template-columns: 34px 1fr 34px;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
     }
-    header.bar h1 { font-size: 20px; margin: 0; font-weight: 600; }
+    header.topbar h1 { font-size: 18px; margin: 0; font-weight: 600; text-align: center; }
+    .books {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      margin: 0 0 16px;
+    }
+    .books button {
+      border: 0; background: #16171c; color: var(--mute);
+      border-radius: 999px; padding: 8px 10px; font-size: 13px; font-weight: 600;
+    }
+    .books button.on { background: var(--blue); color: #fff; }
     .avatar {
       width: 34px; height: 34px; border-radius: 50%;
       background: linear-gradient(135deg, #4b5563, #1f2937);
@@ -89,7 +107,7 @@
     }
     .search-wrap { position: relative; }
     .search-wrap svg { position: absolute; left: 12px; top: 13px; opacity: .5; }
-    .pills { display: flex; gap: 8px; overflow-x: auto; margin-bottom: 14px; }
+    .pills { display: flex; gap: 8px; overflow-x: auto; margin-bottom: 14px; -webkit-overflow-scrolling: touch; }
     .pills button {
       border: 0; background: #16171c; color: var(--mute);
       border-radius: 999px; padding: 8px 14px; font-size: 13px; font-weight: 600; white-space: nowrap;
@@ -105,6 +123,12 @@
     .status.veto { color: var(--red); }
     .side.sell { color: #fb7185; font-weight: 700; }
     .side.buy { color: #7dd3fc; font-weight: 700; }
+    .side.none { color: var(--mute); font-weight: 600; }
+    .miss { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+    .miss span {
+      font-size: 10px; font-weight: 600; color: #fecaca;
+      background: #3f1212; border-radius: 6px; padding: 2px 6px;
+    }
     .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; font-size: 13px; }
     .grid span { color: var(--mute); display: block; font-size: 11px; }
     .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
@@ -116,7 +140,8 @@
     details.more { margin-top: 8px; color: var(--mute); font-size: 12px; }
     .donut-wrap { display: grid; place-items: center; padding: 10px 0 4px; }
     .donut-label { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; pointer-events: none; }
-    .donut-label b { display: block; font-size: 32px; }
+    .donut-label b { display: block; font-size: 28px; }
+    .donut-label span { font-size: 12px; color: var(--mute); }
     .donut-box { position: relative; width: 180px; height: 180px; display: grid; place-items: center; }
     .mgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .mgrid .card { margin: 0; }
@@ -128,10 +153,13 @@
     .streaks .card { margin: 0; }
     .streaks b { display: block; font-size: 22px; margin: 6px 0 2px; }
     .tabbar {
-      position: fixed; left: 0; right: 0; bottom: 0;
+      position: fixed; left: 50%; bottom: 0;
+      transform: translateX(-50%);
+      width: 100%; max-width: 430px;
       background: var(--nav); border-top: 1px solid var(--line);
       display: grid; grid-template-columns: repeat(4, 1fr);
       padding: 8px 4px calc(8px + env(safe-area-inset-bottom));
+      z-index: 20;
     }
     .tabbar button {
       border: 0; background: none; color: #6b7280;
@@ -140,10 +168,18 @@
     }
     .tabbar button.on { color: #fff; }
     .fab {
-      position: fixed; right: 18px; bottom: calc(78px + env(safe-area-inset-bottom));
+      position: fixed;
+      right: max(16px, calc(50vw - 215px + 16px));
+      bottom: calc(78px + env(safe-area-inset-bottom));
       width: 52px; height: 52px; border: 0; border-radius: 14px;
       background: var(--blue); color: #fff; font-size: 28px; line-height: 1;
       box-shadow: 0 8px 20px rgba(59,130,246,.35);
+      z-index: 21;
+    }
+    .eq-wrap { position: relative; min-height: 140px; }
+    .eq-empty {
+      position: absolute; inset: 0; display: grid; place-items: center;
+      color: var(--mute); font-size: 13px; text-align: center; padding: 16px;
     }
     .hidden { display: none !important; }
     .empty { color: var(--mute); font-size: 14px; padding: 8px 0; }
@@ -156,18 +192,19 @@
   </style>
 </head>
 <body>
-  <header class="bar">
+  <div class="phone">
+  <header class="topbar">
     <div class="avatar">YG</div>
     <h1 id="page-title">Dashboard</h1>
-    <div class="pills" id="books" style="margin:0;max-width:260px">
-      <button type="button" data-book="ict" class="on">ICT</button>
-      <button type="button" data-book="fabio">Fabio</button>
-      <button type="button" data-book="compare">Vs</button>
-    </div>
     <div class="logo" aria-hidden="true">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2"><path d="M4 16l5-5 4 4 7-8"/></svg>
     </div>
   </header>
+  <div class="books" id="books">
+    <button type="button" data-book="ict" class="on">ICT</button>
+    <button type="button" data-book="fabio">Fabio</button>
+    <button type="button" data-book="compare">Vs</button>
+  </div>
 
   <section id="view-home">
     <div id="compare-board" class="hidden row2"></div>
@@ -194,7 +231,10 @@
         <h2>Equity growth</h2>
         <span class="chip">Paper</span>
       </div>
-      <svg class="eq" id="eq" viewBox="0 0 320 140" preserveAspectRatio="none"></svg>
+      <div class="eq-wrap">
+        <svg class="eq" id="eq" viewBox="0 0 320 140" preserveAspectRatio="none"></svg>
+        <div class="eq-empty hidden" id="eq-empty">No closed trades yet</div>
+      </div>
     </div>
     <div class="sec">
       <h2>Recent trades</h2>
@@ -298,6 +338,7 @@
       Settings
     </button>
   </nav>
+  </div>
 
   <script>
     const TITLES = { home: "Dashboard", history: "Trade History", charts: "Analytics", settings: "Settings" };
@@ -353,7 +394,14 @@
 
     function drawEquity(curve) {
       const svg = document.getElementById("eq");
+      const empty = document.getElementById("eq-empty");
       const pts = curve.length < 2 ? [START, START] : curve;
+      const flat = pts.every((v) => v === pts[0]);
+      empty.classList.toggle("hidden", !flat);
+      if (flat) {
+        svg.innerHTML = "";
+        return;
+      }
       const min = Math.min(...pts), max = Math.max(...pts);
       const span = max - min || 1;
       const w = 320, h = 140, p = 10;
@@ -403,21 +451,24 @@
       const pos = ev.position || open[ev.inst_id] || {};
       const status = isOpen ? "open" : ev.type === "paper_close" ? "filled" : ev.type === "stand_down" ? "veto" : "filled";
       const statusText = isOpen ? "Open" : ev.type === "paper_close" ? "Filled" : ev.type === "stand_down" ? "Vetoed" : ev.type;
-      const side = (pos.bias || ev.bias || "") === "short" ? "SELL" : (pos.bias || ev.bias) === "long" ? "BUY" : "—";
+      const side = ev.type === "stand_down" ? "NO TRADE" : (pos.bias || ev.bias || "") === "short" ? "SELL" : (pos.bias || ev.bias) === "long" ? "BUY" : "—";
+      const sideCls = side === "SELL" ? "sell" : side === "BUY" ? "buy" : "none";
+      const miss = (ev.missing || []).map((m) => `<span>${m}</span>`).join("");
       const reasons = (ev.reasons || []).map((r) => `<div>${r}</div>`).join("");
       const actions = isOpen
         ? `<div class="actions"><button class="ghost" type="button" disabled>Modify</button><button class="danger" type="button" disabled>Cancel order</button></div>`
         : `<details class="more"><summary>View details</summary>${reasons || ev.error || "No extra notes."}</details>`;
+      const bookLabel = ev.strategy === "fabio" ? "Fabio AAA" : "ICT paper";
       return `<article class="card hcard">
         <div class="top">
-          <div><div class="sym">${pair(ev.inst_id)}</div><div class="kind">Crypto · ICT paper</div></div>
+          <div><div class="sym">${pair(ev.inst_id)}</div><div class="kind">Crypto · ${bookLabel}</div></div>
           <div class="status ${status}">${statusText}</div>
         </div>
         <div class="grid">
-          <div><span>Side</span><div class="side ${side === "SELL" ? "sell" : "buy"}">${side}</div></div>
+          <div><span>Side</span><div class="side ${sideCls}">${side}</div></div>
           <div><span>${isOpen ? "Limit" : "Price"}</span><div>${ev.last != null ? Number(ev.last).toLocaleString("en-US") : "—"}</div></div>
           <div><span>Time</span><div>${ago(ev.logged_at)}</div></div>
-          <div><span>${ev.type === "stand_down" ? "Missing" : "R:R"}</span><div>${ev.missing ? ev.missing.join(", ") : (pos.rr != null ? Number(pos.rr).toFixed(2) : "—")}</div></div>
+          <div><span>${ev.type === "stand_down" ? "Missing" : "R:R"}</span><div>${miss ? `<div class="miss">${miss}</div>` : (pos.rr != null ? Number(pos.rr).toFixed(2) : "—")}</div></div>
         </div>
         ${actions}
       </article>`;
@@ -491,11 +542,9 @@
       drawEquity(a.curve);
 
       const recents = (DATA.feed || []).filter((e) => e.type === "paper_close" || e.type === "paper_fill").slice(0, 4);
-      const fallback = (DATA.feed || []).filter((e) => e.type !== "error").slice(0, 4);
-      const list = recents.length ? recents : fallback;
-      document.getElementById("recent").innerHTML = list.length
-        ? list.map(recentItem).join("")
-        : `<p class="empty">No trades yet. Vetos stay in History until a 6/6 fill.</p>`;
+      document.getElementById("recent").innerHTML = recents.length
+        ? recents.map(recentItem).join("")
+        : `<p class="empty">No fills yet. ${DATA.stats?.stand_downs || 0} vetos are in History.</p>`;
 
       const rows = (DATA.feed || []).filter(matches);
       if (!rows.length) {
