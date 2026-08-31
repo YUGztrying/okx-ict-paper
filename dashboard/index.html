@@ -227,6 +227,7 @@
   </div>
 
   <section id="view-home">
+    <div id="desk-alert"></div>
     <div id="compare-board" class="hidden row2"></div>
     <div id="opens"></div>
     <div id="home-ict">
@@ -413,8 +414,12 @@
     };
     const dayLabel = (iso) => new Date(iso).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "Africa/Abidjan" });
 
+    // trades is the full close history, oldest first. feed is display-only and
+    // capped, so stand-downs used to push real trades out of the P&L within hours.
+    const tradesOf = (d) => (d.trades ? d.trades : (d.feed || []).filter((e) => e.type === "paper_close").slice().reverse());
+
     function analytics() {
-      const closes = (DATA.feed || []).filter((e) => e.type === "paper_close").reverse();
+      const closes = tradesOf(DATA).filter((e) => e.type === "paper_close");
       const wins = closes.filter((e) => e.result === "win");
       const losses = closes.filter((e) => e.result === "loss");
       const wr = closes.length ? wins.length / closes.length : null;
@@ -672,8 +677,8 @@
       const open = DATA.open || {};
       const isOpen = ev.type === "paper_fill" && open[ev.inst_id];
       const pos = ev.position || open[ev.inst_id] || {};
-      const status = isOpen ? "open" : ev.type === "paper_close" ? "filled" : ev.type === "stand_down" ? "veto" : "filled";
-      const statusText = isOpen ? "Open" : ev.type === "paper_close" ? "Filled" : ev.type === "stand_down" ? "Vetoed" : ev.type;
+      const status = isOpen ? "open" : ev.type === "paper_close" ? "filled" : ev.type === "stand_down" ? "veto" : ev.type === "error" ? "veto" : "filled";
+      const statusText = isOpen ? "Open" : ev.type === "paper_close" ? "Filled" : ev.type === "stand_down" ? "Vetoed" : ev.type === "error" ? "Error" : ev.type;
       const side = ev.type === "stand_down" ? "NO TRADE" : (pos.bias || ev.bias || "") === "short" ? "SELL" : (pos.bias || ev.bias) === "long" ? "BUY" : "—";
       const sideCls = side === "SELL" ? "sell" : side === "BUY" ? "buy" : "none";
       const miss = (ev.missing || []).map((m) => `<span>${m}</span>`).join("");
@@ -685,7 +690,9 @@
         ? `<div class="actions"><button class="ghost" type="button" disabled>Modify</button><button class="danger" type="button" disabled>Cancel order</button></div>`
         : `<details class="more"><summary>View details</summary>${reasons || ev.error || "No extra notes."}</details>`;
       const bookLabel = ev.strategy === "fabio" ? "Fabio AAA" : "ICT paper";
-      const extra = ev.type === "stand_down"
+      const extra = ev.type === "error"
+        ? `<div><span>Error</span><div>${ev.error || "—"}</div></div>`
+        : ev.type === "stand_down"
         ? `<div><span>Missing</span><div>${miss ? `<div class="miss">${miss}</div>` : "—"}</div></div>`
         : (sz
           ? `<div><span>Size</span><div>${qtyFmt(ev.inst_id, sz.qty)}</div></div>
@@ -715,14 +722,14 @@
       if (filter === "completed" && ev.type !== "paper_close") return false;
       if (filter === "open" && !(ev.type === "paper_fill" && open[ev.inst_id])) return false;
       if (filter === "veto" && ev.type !== "stand_down") return false;
-      if (filter === "all" && ev.type === "error") return false;
       if (!query) return true;
       return `${ev.inst_id} ${ev.type} ${ev.bias} ${(ev.missing || []).join(" ")}`.toLowerCase().includes(query);
     }
 
     function deskOf(name) {
       if (RAW && RAW.books && RAW.books[name]) return RAW.books[name];
-      return name === "ict" ? RAW : { feed: [], stats: {}, open: {}, latest: {} };
+      if (name === "ict" && RAW && !RAW.books) return RAW; // payload written before books
+      return { feed: [], trades: [], stats: {}, open: {} };
     }
 
     function selectBook() {
@@ -760,10 +767,31 @@
       }).join("");
     }
 
+    // A strategy that throws logs errors and then just looks quiet: its events
+    // never reach the feed's trade filters. Say so instead of showing a flat book.
+    const ERROR_FRESH_MS = 2 * 60 * 60 * 1000;
+
+    function renderAlert() {
+      const books = BOOK === "compare" ? [["ict", "ICT 2022"], ["fabio", "Fabio AAA"]] : [[BOOK, BOOK === "fabio" ? "Fabio AAA" : "ICT 2022"]];
+      const rows = books
+        .map(([key, label]) => [label, deskOf(key)])
+        .filter(([, d]) => {
+          const at = (d.last_error || {}).logged_at;
+          return at && Date.now() - new Date(at).getTime() < ERROR_FRESH_MS;
+        })
+        .map(([label, d]) => {
+          const e = d.last_error || {};
+          return `<div class="card"><div class="label">${label} is erroring</div>
+            <div class="hint">${(d.stats || {}).errors || 0} logged · last ${ago(e.logged_at)} · ${e.error || "see History"}</div></div>`;
+        });
+      document.getElementById("desk-alert").innerHTML = rows.join("");
+    }
+
     function render() {
       if (!RAW) return;
       selectBook();
       if (!DATA) return;
+      renderAlert();
       renderCompare();
       const a = analytics();
       const pnlEl = document.getElementById("pnl");
@@ -778,7 +806,10 @@
       drawEquity(a.curve);
       renderOpens();
 
-      const recents = (DATA.feed || []).filter((e) => e.type === "paper_close" || e.type === "paper_fill").slice(0, 4);
+      const recents = tradesOf(DATA)
+        .filter((e) => e.type === "paper_close" || e.type === "paper_fill")
+        .slice(-4)
+        .reverse();
       document.getElementById("recent").innerHTML = recents.length
         ? recents.map(recentItem).join("")
         : `<p class="empty">No fills yet. ${DATA.stats?.stand_downs || 0} vetos are in History.</p>`;

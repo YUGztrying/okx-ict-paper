@@ -2,3 +2,8 @@ __pycache__/
 .venv/
 .pytest_cache/
 .scratch/
+
+# Derived from journal/*.jsonl on every scan and rebuilt for the Pages
+# artifact. Committing it churned a fresh timestamp into git every 15 minutes
+# and made the journal push conflict for no reason.
+dashboard/desk.json

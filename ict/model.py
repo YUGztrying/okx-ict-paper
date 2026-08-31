@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 from ict.okx_data import Candle
+from ict.sessions import ICT_KILLZONES, session_score as _score
 
 NY = ZoneInfo("America/New_York")
 
@@ -51,14 +52,8 @@ def _ts_ny(ts_ms: int) -> datetime:
 
 
 def session_score(now: datetime | None = None) -> tuple[int, str]:
-    hour = (now or datetime.now(timezone.utc)).hour
-    if 13 <= hour < 16:
-        return 5, "ny"
-    if 7 <= hour < 11:
-        return 4, "london"
-    if 0 <= hour < 8:
-        return 3, "asia"
-    return 2, "dead"
+    """ICT killzones on the shared clock (ict/sessions.py). DST-aware."""
+    return _score(now, ICT_KILLZONES)
 
 
 def ny_days(hourly: list[Candle]) -> list[NyBar]:

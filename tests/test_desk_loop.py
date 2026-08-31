@@ -103,21 +103,25 @@ class WsParse(unittest.TestCase):
         self.assertEqual(ticks["BTC-USDT"].last, 9.0)
         self.assertEqual(closes, [BarClose("ETH-USDT", 100, 2.0)])
 
-    def test_seed_bar_is_not_a_decision(self) -> None:
-        seen: dict[str, int] = {}
-        self.assertFalse(is_decision_bar("ETH-USDT", 100, seen))
-        self.assertEqual(seen["ETH-USDT"], 100)
+    def test_bar_already_scanned_is_not_a_decision(self) -> None:
+        seen = {"ETH-USDT": 100}
         self.assertFalse(is_decision_bar("ETH-USDT", 100, seen))
 
     def test_next_confirm_is_a_decision(self) -> None:
         seen = {"ETH-USDT": 100}
         self.assertTrue(is_decision_bar("ETH-USDT", 200, seen))
-        self.assertEqual(seen["ETH-USDT"], 200)
-        self.assertFalse(is_decision_bar("ETH-USDT", 200, seen))
 
-    def test_failed_seed_zero_still_fires_first_real_close(self) -> None:
-        seen = {"ETH-USDT": 0}
-        self.assertTrue(is_decision_bar("ETH-USDT", 1700000000000, seen))
+    def test_unseen_instrument_fires(self) -> None:
+        # A start tick whose fetch failed records nothing for that instrument.
+        # Missing must mean "not decided yet", never "already seeded".
+        self.assertTrue(is_decision_bar("ETH-USDT", 1700000000000, {}))
+
+    def test_predicate_does_not_record_the_bar(self) -> None:
+        # tick() records what it analyzed. If this marked the bar seen, the
+        # scan the caller is about to run would skip the triggering instrument.
+        seen: dict[str, int] = {}
+        is_decision_bar("ETH-USDT", 100, seen)
+        self.assertEqual(seen, {})
 
 
 class Chain(unittest.TestCase):

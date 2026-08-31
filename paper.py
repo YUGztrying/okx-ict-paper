@@ -15,7 +15,7 @@ from ict.journal import append, consecutive_losses, load_open, save_open, stats,
 from ict.model import Fiche, analyze as analyze_ict
 from ict.cloud import dispatch_next, persist_enabled, persist_journal
 from ict.exits import exit_result, realized_r
-from ict.okx_data import closed_candle, fetch_candles, fetch_last, near_bar_boundary
+from ict.okx_data import closed_bars, closed_candle, fetch_candles, fetch_last, near_bar_boundary
 from ict.okx_ws import PublicFeed, drain_events, is_decision_bar
 from ict.sizing import position_size
 
@@ -138,7 +138,7 @@ def print_status() -> None:
     for book in ("ict", "fabio"):
         s = stats(book)
         wr = f"{s['win_rate']*100:.1f}%" if s["win_rate"] is not None else "n/a"
-        print(f"{book}: fills={s['fills']} vetos={s['stand_downs']} wr={wr} open={list(s['open'])}")
+        print(f"{book}: fills={s['fills']} vetos={s['stand_downs']} wr={wr} open={list(load_open(book))}")
 
 
 def mark_all(cfg: dict, marks: dict[str, float] | None = None) -> None:
@@ -165,17 +165,10 @@ def any_open() -> bool:
     return bool(load_open("ict") or load_open("fabio"))
 
 
-def seed_seen_closes(instruments: list[str], bar: str) -> dict[str, int]:
-    """Remember the bar the start tick already decided on. 0 = seed failed."""
-    seen: dict[str, int] = {}
-    for inst in instruments:
-        try:
-            closed = closed_candle(fetch_candles(inst, bar, 4), bar)
-            seen[inst] = closed.ts if closed else 0
-        except Exception as exc:
-            print(f"{inst}: close-seed error {exc}", file=sys.stderr)
-            seen[inst] = 0
-    return seen
+def still_pending(pending: dict[str, int], seen_close: dict[str, int]) -> dict[str, int]:
+    """Closes still waiting for a scan. A scan records the bar it analyzed, so
+    anything left here is a bar REST had not published yet — retry, never drop."""
+    return {inst: ts for inst, ts in pending.items() if seen_close.get(inst) != ts}
 
 
 def hand_off_watch() -> bool:
@@ -187,18 +180,37 @@ def hand_off_watch() -> bool:
     return dispatch_next()
 
 
-def tick(cfg: dict, marks: dict[str, float] | None = None) -> None:
+def tick(cfg: dict, marks: dict[str, float] | None = None, seen_close: dict[str, int] | None = None) -> bool:
+    """Scan every instrument on its newest CLOSED bar.
+
+    One close event means one desk scan, not one per instrument: `tick` already
+    walks the whole instrument list, so it records the bar it decided on for
+    each of them in `seen_close`. A second trigger for the same bar — the other
+    instrument's confirm, or the REST stall guard — then finds nothing to do.
+
+    Returns True when at least one instrument was analyzed.
+    """
     print(f"\n=== {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')} ===")
     mark_all(cfg, marks)
+    bar = cfg["entry_bar"]
+    scanned = False
     for inst in cfg["instruments"]:
         try:
-            hourly = fetch_candles(inst, cfg["htf_bar"], int(cfg["htf_limit"]))
-            entry = fetch_candles(inst, cfg["entry_bar"], int(cfg["entry_limit"]))
+            hourly = closed_bars(fetch_candles(inst, cfg["htf_bar"], int(cfg["htf_limit"])), cfg["htf_bar"])
+            entry = closed_bars(fetch_candles(inst, bar, int(cfg["entry_limit"])), bar)
             last = float(marks[inst]) if marks and inst in marks else fetch_last(inst)
         except Exception as exc:
             print(f"{inst}: error {exc}", file=sys.stderr)
             append({"type": "error", "inst_id": inst, "error": str(exc)}, book="ict")
             continue
+        if not entry or not hourly:
+            print(f"{inst}: no closed {bar} bar yet", file=sys.stderr)
+            continue
+        if seen_close is not None:
+            if seen_close.get(inst) == entry[-1].ts:
+                continue
+            seen_close[inst] = entry[-1].ts
+        scanned = True
         try:
             maybe_fill(
                 analyze_ict(
@@ -220,8 +232,11 @@ def tick(cfg: dict, marks: dict[str, float] | None = None) -> None:
         except Exception as exc:
             append({"type": "error", "inst_id": inst, "error": str(exc)}, book="fabio")
             print(f"[fabio] {inst}: error {exc}", file=sys.stderr)
+    if not scanned:
+        return False
     write_desk()
     persist_journal("paper scan")
+    return True
 
 
 def watch(cfg: dict, minutes: float, chain_after: float = 0) -> None:
@@ -238,10 +253,17 @@ def watch(cfg: dict, minutes: float, chain_after: float = 0) -> None:
     feed.start()
     if not feed.connected.wait(15):
         print("WS not up yet — REST marks until it is", file=sys.stderr)
-    tick(cfg)
-    seen_close = seed_seen_closes(list(cfg["instruments"]), bar)
+    # The start tick seeds itself: it records the exact bar it decided on for
+    # each instrument. Seeding separately afterwards could swallow a bar that
+    # closed while the tick was still fetching and pushing.
+    seen_close: dict[str, int] = {}
+    tick(cfg, seen_close=seen_close)
     persist_journal("paper watch start")
     print(f"watch WS tickers + business {bar} confirm=1 — no live orders")
+    # Bars we know closed but have not scanned yet. A scan reads REST, which can
+    # trail the socket by a moment; the decision waits rather than being dropped.
+    pending: dict[str, int] = {}
+    last_scan_try = 0.0
     try:
         while deadline is None or time.time() < deadline:
             ticks, closes = drain_events(feed.events, timeout=1.0)
@@ -249,7 +271,11 @@ def watch(cfg: dict, minutes: float, chain_after: float = 0) -> None:
                 if is_decision_bar(ev.inst_id, ev.ts, seen_close):
                     print(f"{ev.inst_id}: {bar} closed @ {ev.close}")
                     marks[ev.inst_id] = ev.close
-                    tick(cfg, marks)
+                    pending[ev.inst_id] = ev.ts
+            if pending and time.time() - last_scan_try >= 2.0:
+                last_scan_try = time.time()
+                tick(cfg, marks, seen_close)
+                pending = still_pending(pending, seen_close)
             if ticks:
                 for inst, ev in ticks.items():
                     marks[inst] = ev.last
@@ -270,7 +296,11 @@ def watch(cfg: dict, minutes: float, chain_after: float = 0) -> None:
                     if closed and is_decision_bar(inst, closed.ts, seen_close):
                         print(f"{inst}: {bar} closed @ {closed.close} (REST)")
                         marks[inst] = closed.close
-                        tick(cfg, marks)
+                        pending[inst] = closed.ts
+                if pending and time.time() - last_scan_try >= 2.0:
+                    last_scan_try = time.time()
+                    tick(cfg, marks, seen_close)
+                    pending = still_pending(pending, seen_close)
             if chain_at and not chained and now >= chain_at and now - last_handoff >= 30:
                 last_handoff = now
                 if hand_off_watch():

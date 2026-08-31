@@ -81,20 +81,14 @@ def parse_message(raw: str) -> list[Tick | BarClose]:
 
 
 def is_decision_bar(inst_id: str, ts: int, seen_close: dict[str, int]) -> bool:
-    """True when this confirm=1 is a new close, not the seed and not a duplicate.
+    """True when no scan has decided on this instrument's bar yet.
 
-    The start tick already decided on the current closed bar. The first ts we
-    record per instrument is that seed. A later ts is the trader waiting for
-    the next close. If REST seed failed, seen_close[inst]=0 so the first real
-    confirm=1 still fires (duplicate veto log beats a missed 15m).
+    Pure on purpose: `tick()` records the bar it actually analyzed, for every
+    instrument it walks. If this marked the bar as seen, the scan that the
+    caller is about to run would skip the very instrument that triggered it —
+    and an instrument whose fetch failed would be recorded as decided.
     """
-    if seen_close.get(inst_id) == ts:
-        return False
-    if inst_id not in seen_close:
-        seen_close[inst_id] = ts
-        return False
-    seen_close[inst_id] = ts
-    return True
+    return seen_close.get(inst_id) != ts
 
 
 def ticker_subscribe(instruments: list[str]) -> dict[str, Any]:
