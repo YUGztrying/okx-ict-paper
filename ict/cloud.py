@@ -5,7 +5,9 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 import threading
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -16,8 +18,46 @@ def persist_enabled() -> bool:
     return os.environ.get("PAPER_GIT_PUSH") == "1"
 
 
-def persist_journal(reason: str = "paper scan") -> bool:
-    """Commit journal + desk.json. No-op unless PAPER_GIT_PUSH=1.
+def _branch() -> str:
+    ref = os.environ.get("GITHUB_REF_NAME")
+    if ref:
+        return ref
+    proc = subprocess.run(
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    name = (proc.stdout or "").strip()
+    return name if name and name != "HEAD" else "main"
+
+
+def _rebase_on_origin(branch: str) -> bool:
+    """Replay our journal commits on top of origin. The runner checks out once
+    and watches for hours; a human push to the branch must not strand it."""
+    from ict.journal import invalidate_cache
+
+    fetch = subprocess.run(["git", "fetch", "origin", branch], cwd=ROOT, check=False)
+    if fetch.returncode != 0:
+        return False
+    rebase = subprocess.run(["git", "rebase", "FETCH_HEAD"], cwd=ROOT, check=False)
+    if rebase.returncode != 0:
+        subprocess.run(["git", "rebase", "--abort"], cwd=ROOT, check=False)
+        print("journal rebase conflicted — left the local commits alone", file=sys.stderr)
+        invalidate_cache()
+        return False
+    # The rebase may have rewritten the middle of runs.jsonl; the tail read
+    # in _parse_lines cannot see that.
+    invalidate_cache()
+    return True
+
+
+def persist_journal(reason: str = "paper scan", attempts: int = 3) -> bool:
+    """Commit and push the journal. No-op unless PAPER_GIT_PUSH=1.
+
+    desk.json is derived from these files and is rebuilt for the Pages
+    artifact, so it stays out of git history and out of the merge path.
 
     Returns True when origin is current (nothing to commit, or push succeeded).
     False if the flag is off or the push failed — caller must not chain yet.
@@ -25,13 +65,20 @@ def persist_journal(reason: str = "paper scan") -> bool:
     if not persist_enabled():
         return False
     with _LOCK:
-        subprocess.run(["git", "add", "journal", "dashboard/desk.json"], cwd=ROOT, check=False)
+        subprocess.run(["git", "add", "journal"], cwd=ROOT, check=False)
         diff = subprocess.run(["git", "diff", "--staged", "--quiet"], cwd=ROOT)
         if diff.returncode == 0:
             return True
         subprocess.run(["git", "commit", "-m", reason], cwd=ROOT, check=False)
-        push = subprocess.run(["git", "push"], cwd=ROOT, check=False)
-        return push.returncode == 0
+        branch = _branch()
+        for attempt in range(1, attempts + 1):
+            if subprocess.run(["git", "push", "origin", f"HEAD:{branch}"], cwd=ROOT, check=False).returncode == 0:
+                return True
+            if attempt == attempts or not _rebase_on_origin(branch):
+                break
+            time.sleep(2 ** (attempt - 1))
+        print(f"journal push failed after {attempts} attempts — fills are only on this runner", file=sys.stderr)
+        return False
 
 
 def should_dispatch_next(in_progress: int, queued: int) -> bool:

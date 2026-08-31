@@ -10,6 +10,8 @@ OKX’s **business** socket (`wss://ws.okx.com:8443/ws/v5/business`) pushes `can
 
 If confirm=1 is late or dropped, REST closed-candle is checked in the seconds around the bar boundary. That is a stall guard, not a 10-minute poll.
 
+A bar boundary is **one** scan, not one per instrument. A scan walks every instrument, so it records the bar it decided on for each of them; the other instrument’s confirm (or the REST guard finding the same close) then has nothing left to do. Every candle that reaches a model has fully closed — the newest REST row is the bar that is still printing, and it is dropped before the model sees it.
+
 Fill price is the last print (WS) or the closed bar’s close, not a fantasy mid.
 
 ## Exit
@@ -25,6 +27,8 @@ If the socket goes quiet for 8s while a position is open, REST last is used unti
 GitHub’s `*/10` cron on a public repo skipped hours. `GITHUB_TOKEN` also does not retrigger `on: push`, so a “paper scan” commit cannot keep the loop alive.
 
 The job now **holds the sockets for ~5h20** (GitHub’s cap is 6h). Before starting the next runner it **pushes the journal**, then dispatches. That order matters: the new job must checkout the latest fills and closes. A 6-hour cron is only a dead-man if the chain dies. `dispatch_next()` refuses to start a second chain when one is already queued or running.
+
+The runner checks out once and then watches for hours, so origin can move under it. A rejected push is fetched and rebased, then retried — otherwise a single human merge to the branch would silently strand every fill and close for the rest of the window. Only `journal/` is committed: `dashboard/desk.json` is derived from it and rebuilt for the Pages artifact, so it never churns history or conflicts.
 
 Handoff is ~1–2 minutes while the next runner checks out and connects. The new job’s first act is a REST mark-to-market, so a level that is still through SL/TP is closed. A wick that tagged TP and fully retraced **only** during that handoff could be missed. That is the remaining GitHub limit, not a poll interval.
 

@@ -15,27 +15,23 @@ from datetime import datetime, timezone
 
 from ict.model import Check, Fiche
 from ict.okx_data import Candle
+from ict.sessions import FABIO_SESSIONS, Session, current
 
 
-def _session(now: datetime) -> tuple[str, int, int]:
-    hour = now.hour
-    if 13 <= hour < 21:
-        return "ny", 13, 21
-    if 7 <= hour < 13:
-        return "london", 7, 13
-    if 0 <= hour < 8:
-        return "asia", 0, 8
-    return "dead", 0, 0
+def _session(now: datetime) -> Session:
+    """Full cash session on the shared clock (ict/sessions.py). DST-aware."""
+    return current(now, FABIO_SESSIONS)
 
 
-def _session_bars(entry: list[Candle], now: datetime, start_h: int, end_h: int) -> list[Candle]:
-    today = now.date()
+def _session_bars(entry: list[Candle], session: Session) -> list[Candle]:
+    """Bars inside the running session. Bounds are real instants, so a window
+    that straddles midnight UTC keeps its whole profile."""
+    if not session.live or session.start is None or session.end is None:
+        return []
     out = []
     for c in entry:
         t = datetime.fromtimestamp(c.ts / 1000, tz=timezone.utc)
-        if t.date() != today:
-            continue
-        if start_h <= t.hour < end_h:
+        if session.start <= t < session.end:
             out.append(c)
     return out
 
@@ -77,11 +73,11 @@ def _rejection(bar: Candle, side: str, extreme: float) -> bool:
 def analyze(inst_id: str, last: float, entry: list[Candle], *, min_rr: float = 1.5, now: datetime | None = None) -> Fiche:
     now = now or datetime.now(timezone.utc)
     fiche = Fiche(inst_id=inst_id, last=last, bias="unclear")
-    name, start_h, end_h = _session(now)
-    sess_ok = name != "dead"
-    fiche.checks.append(Check("session", sess_ok, f"{name} {now.hour:02d}h UTC"))
+    session = _session(now)
+    sess_ok = session.live
+    fiche.checks.append(Check("session", sess_ok, f"{session.name} {now.hour:02d}h UTC"))
 
-    bars = _session_bars(entry, now, start_h, end_h) if sess_ok else []
+    bars = _session_bars(entry, session)
     profile_ok = len(bars) >= 4
     fiche.checks.append(Check("profile", profile_ok, f"{len(bars)} session bars (need 4)"))
 

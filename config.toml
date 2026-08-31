@@ -14,7 +14,9 @@ htf_bar = "1H"
 htf_limit = 240
 entry_limit = 96
 
-# Dead zone (UTC) is a hard veto. CI = GMT year-round.
-# Asia 00-08 score 3 | London 07-11 score 4 | NY 13-16 score 5
+# Dead zone is a hard veto. Windows live in ict/sessions.py in LOCAL market
+# hours, so they follow DST instead of drifting an hour for half the year.
+# ICT killzones: Asia 09-17 Tokyo (3) | London 07-11 local (4) | NY 08-11 ET (5)
+# Fabio runs the full cash session (NY 08-16 ET) — it needs the whole profile.
 # The watch loop sits the public WS; this value is only for --loop.
 loop_minutes = 10

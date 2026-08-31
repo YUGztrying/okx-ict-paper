@@ -12,6 +12,16 @@ JOURNAL_DIR = ROOT / "journal"
 RUNS = JOURNAL_DIR / "runs.jsonl"
 OPENS = JOURNAL_DIR / "open.json"
 
+TRADE_TYPES = ("paper_fill", "paper_close")
+# The feed is what the blotter lists; trades are what its P&L is computed from.
+# Stand-downs would otherwise push real fills out of a capped feed within hours.
+TRADE_LIMIT = 500
+
+# book -> {"size": int, "mtime": int, "events": list}. runs.jsonl is append-only
+# and this process is its only writer, so a scan reads the new tail, not the
+# whole file. Without this every tick reparses a journal that grows forever.
+_CACHE: dict[str, dict[str, Any]] = {}
+
 
 def _paths(book: str) -> tuple[Path, Path]:
     if book == "ict":
@@ -22,6 +32,15 @@ def _paths(book: str) -> tuple[Path, Path]:
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def invalidate_cache(book: str | None = None) -> None:
+    """Drop parsed events. Call when the file changed under us — a git rebase
+    can rewrite the middle of the journal, which the tail read cannot see."""
+    if book is None:
+        _CACHE.clear()
+    else:
+        _CACHE.pop(book, None)
 
 
 def append(event: dict[str, Any], book: str = "ict") -> None:
@@ -45,17 +64,44 @@ def save_open(state: dict[str, Any], book: str = "ict") -> None:
     opens.write_text(json.dumps(state, indent=2), encoding="utf-8")
 
 
-def consecutive_losses(inst_id: str, book: str = "ict") -> int:
+def _decode(blob: bytes) -> list[dict[str, Any]]:
+    events: list[dict[str, Any]] = []
+    for line in blob.decode("utf-8", errors="replace").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            events.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return events
+
+
+def _parse_lines(book: str = "ict") -> list[dict[str, Any]]:
+    """Every journal event, oldest first. The returned list is shared — read it,
+    do not mutate it."""
     runs, _ = _paths(book)
     if not runs.exists():
-        return 0
+        invalidate_cache(book)
+        return []
+    stat = runs.stat()
+    cached = _CACHE.get(book)
+    if cached and cached["size"] == stat.st_size and cached["mtime"] == stat.st_mtime_ns:
+        return cached["events"]
+    grew = bool(cached) and stat.st_size > cached["size"]
+    offset = cached["size"] if grew else 0
+    with runs.open("rb") as fh:
+        fh.seek(offset)
+        blob = fh.read()
+    events = (list(cached["events"]) if grew else []) + _decode(blob)
+    _CACHE[book] = {"size": stat.st_size, "mtime": stat.st_mtime_ns, "events": events}
+    return events
+
+
+def consecutive_losses(inst_id: str, book: str = "ict", events: list[dict[str, Any]] | None = None) -> int:
     streak = 0
-    lines = runs.read_text(encoding="utf-8").strip().splitlines()
-    for line in reversed(lines):
-        event = json.loads(line)
-        if event.get("inst_id") != inst_id:
-            continue
-        if event.get("type") != "paper_close":
+    for event in reversed(_parse_lines(book) if events is None else events):
+        if event.get("inst_id") != inst_id or event.get("type") != "paper_close":
             continue
         if event.get("result") == "loss":
             streak += 1
@@ -65,18 +111,18 @@ def consecutive_losses(inst_id: str, book: str = "ict") -> int:
     return streak
 
 
-def stats(book: str = "ict") -> dict[str, Any]:
-    runs, _ = _paths(book)
-    if not runs.exists():
-        return {"fills": 0, "wins": 0, "losses": 0, "stand_downs": 0, "win_rate": None, "avg_r": None, "open": {}}
-    fills = wins = losses = stand = 0
+def stats_from(events: list[dict[str, Any]]) -> dict[str, Any]:
+    """Counters over the whole journal. Open positions live on the snapshot, not
+    here — one copy per payload."""
+    fills = wins = losses = stand = errors = 0
     r_sum = 0.0
     r_n = 0
-    for line in runs.read_text(encoding="utf-8").splitlines():
-        event = json.loads(line)
+    for event in events:
         kind = event.get("type")
         if kind == "stand_down":
             stand += 1
+        elif kind == "error":
+            errors += 1
         elif kind == "paper_fill":
             fills += 1
         elif kind == "paper_close":
@@ -93,37 +139,20 @@ def stats(book: str = "ict") -> dict[str, Any]:
         "wins": wins,
         "losses": losses,
         "stand_downs": stand,
+        "errors": errors,
         "win_rate": (wins / closed) if closed else None,
         "avg_r": (r_sum / r_n) if r_n else None,
-        "open": load_open(book),
     }
 
 
-def _parse_lines(book: str = "ict") -> list[dict[str, Any]]:
-    runs, _ = _paths(book)
-    if not runs.exists():
-        return []
-    events: list[dict[str, Any]] = []
-    for line in runs.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            events.append(json.loads(line))
-        except json.JSONDecodeError:
-            continue
-    return events
+def stats(book: str = "ict") -> dict[str, Any]:
+    return stats_from(_parse_lines(book))
 
 
 def snapshot(limit: int = 40, book: str = "ict") -> dict[str, Any]:
     events = _parse_lines(book)
-    latest: dict[str, Any] = {}
-    for event in reversed(events):
-        inst = event.get("inst_id")
-        if inst and inst not in latest and event.get("type") != "error":
-            latest[inst] = event
-        if len(latest) >= 8:
-            break
+    trades = [e for e in events if e.get("type") in TRADE_TYPES][-TRADE_LIMIT:]
+    errors = [e for e in events if e.get("type") == "error"]
     feed = list(reversed(events[-limit:]))
     last_scan = events[-1]["logged_at"] if events else None
     opened = {inst: attach_size(dict(pos)) for inst, pos in load_open(book).items()}
@@ -132,17 +161,20 @@ def snapshot(limit: int = 40, book: str = "ict") -> dict[str, Any]:
         "book": book,
         "generated_at": _now(),
         "last_scan": last_scan,
-        "stats": stats(book),
+        "stats": stats_from(events),
         "open": opened,
-        "latest": latest,
+        "trades": trades,
+        "last_error": errors[-1] if errors else None,
         "feed": feed,
     }
 
 
 def desk_payload() -> dict[str, Any]:
-    ict = snapshot(book="ict")
-    fabio = snapshot(book="fabio")
-    return {**ict, "books": {"ict": ict, "fabio": fabio}}
+    return {
+        "mode": "paper",
+        "generated_at": _now(),
+        "books": {"ict": snapshot(book="ict"), "fabio": snapshot(book="fabio")},
+    }
 
 
 def write_desk(path: Path | None = None) -> Path:

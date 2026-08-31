@@ -53,6 +53,12 @@ jobs:
           PAPER_GIT_PUSH: "1"
         run: python -c "from ict.cloud import persist_journal; persist_journal('paper scan')"
 
+      # desk.json is derived and untracked, so the artifact needs it rebuilt
+      # from the journal this run just pushed.
+      - name: Rebuild dashboard payload
+        if: always()
+        run: python -c "from ict.journal import write_desk; print(write_desk())"
+
       - uses: actions/upload-pages-artifact@v3
         if: always()
         with:

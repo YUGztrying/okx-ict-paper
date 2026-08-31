@@ -65,14 +65,22 @@ def bar_ms(bar: str) -> int:
     return BAR_MS[bar]
 
 
-def closed_candle(candles: list[Candle], bar: str, now_ms: int | None = None) -> Candle | None:
-    """Newest candle that has fully closed. OKX's latest row is often still forming."""
+def closed_bars(candles: list[Candle], bar: str, now_ms: int | None = None) -> list[Candle]:
+    """Only candles whose window has fully elapsed.
+
+    OKX's latest row is the bar that is still printing. A trader does not read
+    a setup off a half-formed candle, so nothing that reaches the models may
+    contain one.
+    """
     width = bar_ms(bar)
     now = int(now_ms if now_ms is not None else time.time() * 1000)
-    for candle in reversed(candles):
-        if candle.ts + width <= now:
-            return candle
-    return None
+    return [candle for candle in candles if candle.ts + width <= now]
+
+
+def closed_candle(candles: list[Candle], bar: str, now_ms: int | None = None) -> Candle | None:
+    """Newest candle that has fully closed. OKX's latest row is often still forming."""
+    closed = closed_bars(candles, bar, now_ms)
+    return closed[-1] if closed else None
 
 
 def seconds_until_bar_close(bar: str, now: float | None = None) -> float:
