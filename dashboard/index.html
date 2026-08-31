@@ -1,386 +1,493 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="theme-color" content="#082226" />
-  <title>Desk paper</title>
+  <meta name="theme-color" content="#0e0e10" />
+  <title>Desk</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --pit: #082226;
-      --pit-2: #0d3338;
-      --ink: #e6efe8;
-      --mute: #8aa39a;
-      --line: #1d4a4f;
-      --watch: #f0e14a;
-      --sell: #e59aaf;
-      --buy: #7dffb3;
-      --warn: #ffb35c;
+      --bg: #0e0e10;
+      --card: #1a1b1f;
+      --line: #2a2b32;
+      --text: #f4f4f5;
+      --mute: #9ca3af;
+      --blue: #3b82f6;
+      --red: #ef4444;
+      --green: #22c55e;
+      --yellow: #eab308;
+      --nav: #141518;
     }
     * { box-sizing: border-box; }
-    html, body { margin: 0; min-height: 100%; background: var(--pit); color: var(--ink); }
+    html, body { margin: 0; background: var(--bg); color: var(--text); }
     body {
-      font-family: "IBM Plex Sans", sans-serif;
-      padding: calc(16px + env(safe-area-inset-top)) 16px calc(88px + env(safe-area-inset-bottom));
+      font-family: Inter, system-ui, sans-serif;
+      padding: calc(12px + env(safe-area-inset-top)) 16px calc(92px + env(safe-area-inset-bottom));
     }
-    .top {
-      display: flex; justify-content: space-between; align-items: baseline;
-      margin-bottom: 14px;
+    header.bar {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 18px;
     }
-    .top h1 {
-      font-family: "Chakra Petch", sans-serif;
-      font-size: 22px; margin: 0; letter-spacing: .02em;
+    header.bar h1 { font-size: 20px; margin: 0; font-weight: 600; }
+    .avatar {
+      width: 34px; height: 34px; border-radius: 50%;
+      background: linear-gradient(135deg, #4b5563, #1f2937);
+      display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #e5e7eb;
     }
-    .top .when {
-      font-family: "Share Tech Mono", monospace;
-      font-size: 11px; color: var(--mute);
+    .logo {
+      width: 34px; height: 34px; border-radius: 10px;
+      background: #111827; border: 1px solid var(--line);
+      display: grid; place-items: center;
     }
-    .clip {
-      width: 42px; height: 10px; margin: 0 auto 10px;
-      background: #c9a24a; border-radius: 2px 2px 1px 1px;
-      box-shadow: 0 2px 0 #6d5420;
+    .card {
+      background: var(--card); border: 1px solid var(--line);
+      border-radius: 14px; padding: 16px; margin-bottom: 12px;
     }
-    .badge {
-      border-radius: 8px;
-      padding: 20px 16px 16px;
-      text-align: center;
-      color: #10140f;
+    .label {
+      font-size: 11px; letter-spacing: .08em; color: var(--mute);
+      font-weight: 600; text-transform: uppercase;
     }
-    .badge.stand { background: var(--sell); }
-    .badge.open { background: var(--buy); }
-    .badge.idle { background: var(--watch); }
-    .badge .kicker {
-      font-family: "Share Tech Mono", monospace;
-      font-size: 11px; letter-spacing: .18em; text-transform: uppercase;
+    .pnl { font-size: 34px; font-weight: 700; color: var(--blue); margin: 8px 0 4px; letter-spacing: -0.03em; }
+    .pnl.flat { color: var(--text); }
+    .pnl.neg { color: var(--red); }
+    .delta { font-size: 13px; color: var(--blue); font-weight: 600; }
+    .delta.flat { color: var(--mute); }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .stat { font-size: 28px; font-weight: 700; margin: 6px 0 2px; letter-spacing: -0.03em; }
+    .hint { font-size: 12px; color: var(--mute); }
+    .sec {
+      display: flex; justify-content: space-between; align-items: center;
+      margin: 18px 0 10px;
     }
-    .badge h2 {
-      font-family: "Chakra Petch", sans-serif;
-      font-weight: 700; font-size: clamp(36px, 11vw, 52px);
-      line-height: .9; margin: 8px 0 6px; letter-spacing: -0.03em;
-    }
-    .badge p { margin: 0; font-size: 14px; }
-    .metrics {
-      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;
-      margin: 12px 0 14px;
-    }
-    .metric {
-      background: var(--pit-2); border: 1px solid var(--line);
-      border-radius: 8px; padding: 10px 8px;
-    }
-    .metric b {
-      display: block; font-family: "Chakra Petch", sans-serif;
-      font-size: 20px; font-weight: 600;
-    }
-    .metric span {
-      font-family: "Share Tech Mono", monospace;
-      font-size: 10px; color: var(--mute); letter-spacing: .06em;
-    }
-    .pair, .card {
-      background: var(--pit-2); border: 1px solid var(--line);
-      border-radius: 8px; padding: 14px; margin-bottom: 10px;
-    }
-    .pair header, .card header {
-      display: flex; justify-content: space-between; align-items: baseline;
-    }
-    .pair h3, .card h3 {
-      font-family: "Chakra Petch", sans-serif;
-      font-size: 20px; margin: 0;
-    }
-    .px { font-family: "Share Tech Mono", monospace; font-size: 16px; }
-    .frac { font-family: "Chakra Petch", sans-serif; font-size: 26px; margin: 8px 0 6px; }
-    .frac span { color: var(--mute); font-size: 15px; }
-    .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .sec h2 { font-size: 16px; margin: 0; font-weight: 600; }
+    .link { color: var(--blue); font-size: 13px; font-weight: 600; background: none; border: 0; }
     .chip {
-      font-family: "Share Tech Mono", monospace; font-size: 11px;
-      padding: 4px 7px; border-radius: 3px; background: #12383d; color: var(--mute);
+      font-size: 12px; color: var(--mute); background: #111318;
+      border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px;
     }
-    .chip.ok { color: var(--buy); background: #11382c; }
-    .chip.no { color: var(--sell); background: #3a1c28; }
-    .pos { margin-top: 10px; font-family: "Share Tech Mono", monospace; font-size: 12px; color: var(--buy); line-height: 1.5; }
-    .section {
-      font-family: "Share Tech Mono", monospace;
-      font-size: 11px; letter-spacing: .16em; text-transform: uppercase;
-      color: var(--mute); margin: 18px 0 10px;
+    .trade {
+      display: grid; grid-template-columns: 40px 1fr auto; gap: 10px; align-items: start;
     }
+    .ico {
+      width: 40px; height: 40px; border-radius: 10px; background: #111318;
+      display: grid; place-items: center; font-size: 11px; font-weight: 700; color: #d1d5db;
+    }
+    .trade h3 { margin: 0; font-size: 15px; font-weight: 600; }
+    .sub { font-size: 12px; color: var(--mute); margin-top: 2px; }
+    .money { font-weight: 700; font-size: 15px; }
+    .money.up { color: var(--blue); }
+    .money.down { color: var(--red); }
+    .prices { grid-column: 2 / -1; display: flex; gap: 16px; font-size: 12px; color: var(--mute); margin-top: 6px; }
     .search {
-      width: 100%; border: 1px solid var(--line); background: var(--pit-2);
-      color: var(--ink); border-radius: 8px; padding: 12px 12px;
-      font-family: "IBM Plex Sans", sans-serif; font-size: 15px; margin-bottom: 10px;
+      width: 100%; background: #16171c; border: 1px solid var(--line);
+      color: var(--text); border-radius: 12px; padding: 12px 14px 12px 38px;
+      font-size: 14px; margin-bottom: 12px;
     }
-    .pills { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; }
+    .search-wrap { position: relative; }
+    .search-wrap svg { position: absolute; left: 12px; top: 13px; opacity: .5; }
+    .pills { display: flex; gap: 8px; overflow-x: auto; margin-bottom: 14px; }
     .pills button {
-      border: 1px solid var(--line); background: var(--pit-2); color: var(--mute);
-      font-family: "Chakra Petch", sans-serif; font-size: 13px;
-      padding: 8px 12px; border-radius: 999px; white-space: nowrap;
+      border: 0; background: #16171c; color: var(--mute);
+      border-radius: 999px; padding: 8px 14px; font-size: 13px; font-weight: 600; white-space: nowrap;
     }
-    .pills button.on { background: var(--watch); color: #10140f; border-color: var(--watch); }
-    .tag {
-      font-family: "Share Tech Mono", monospace; font-size: 11px;
-      padding: 3px 7px; border-radius: 4px;
+    .pills button.on { background: var(--blue); color: #fff; }
+    .month { font-size: 13px; color: var(--mute); font-weight: 600; margin: 16px 0 8px; }
+    .hcard .top { display: flex; justify-content: space-between; align-items: center; }
+    .sym { font-size: 16px; font-weight: 700; }
+    .kind { font-size: 12px; color: var(--mute); }
+    .status { font-size: 12px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+    .status.filled { color: var(--green); }
+    .status.open { color: var(--yellow); }
+    .status.veto { color: var(--red); }
+    .side.sell { color: #fb7185; font-weight: 700; }
+    .side.buy { color: #7dd3fc; font-weight: 700; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; font-size: 13px; }
+    .grid span { color: var(--mute); display: block; font-size: 11px; }
+    .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+    .actions button {
+      border: 0; border-radius: 10px; padding: 10px; font-weight: 600; font-size: 13px;
     }
-    .tag.fill, .tag.win { color: #082226; background: var(--buy); }
-    .tag.veto { color: #3a1c28; background: var(--sell); }
-    .tag.open { color: #10140f; background: var(--watch); }
-    .tag.loss { color: #fff; background: #8b2e3a; }
-    .tag.err { color: #10140f; background: var(--warn); }
-    .card .side { font-family: "Chakra Petch", sans-serif; font-size: 15px; margin: 8px 0 4px; }
-    .card .meta { font-family: "Share Tech Mono", monospace; font-size: 12px; color: var(--mute); line-height: 1.5; }
-    .card details { margin-top: 8px; color: var(--mute); font-size: 13px; }
-    .month {
-      font-family: "Share Tech Mono", monospace; font-size: 11px;
-      color: var(--mute); letter-spacing: .12em; text-transform: uppercase;
-      margin: 16px 0 8px;
-    }
-    .empty { color: var(--mute); font-size: 14px; padding: 16px 0; }
-    .lex details { background: var(--pit-2); border: 1px solid var(--line); border-radius: 8px; padding: 0 14px; margin-bottom: 8px; }
-    .lex summary {
-      font-family: "Chakra Petch", sans-serif; font-size: 16px; padding: 12px 0; cursor: pointer; list-style: none;
-    }
-    .lex summary::-webkit-details-marker { display: none; }
-    .lex dt { font-family: "Share Tech Mono", monospace; font-size: 12px; color: var(--watch); margin-top: 12px; }
-    .lex dd { margin: 4px 0 0; font-size: 14px; line-height: 1.45; }
-    .lex dl { margin: 0 0 14px; }
+    .ghost { background: #2a2b32; color: var(--text); }
+    .danger { background: #7f1d1d; color: #fecaca; }
+    details.more { margin-top: 8px; color: var(--mute); font-size: 12px; }
+    .donut-wrap { display: grid; place-items: center; padding: 10px 0 4px; }
+    .donut-label { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; pointer-events: none; }
+    .donut-label b { display: block; font-size: 32px; }
+    .donut-box { position: relative; width: 180px; height: 180px; display: grid; place-items: center; }
+    .mgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .mgrid .card { margin: 0; }
+    .bar-row { display: grid; grid-template-columns: 110px 1fr auto; gap: 10px; align-items: center; margin: 10px 0; font-size: 13px; }
+    .bar { height: 8px; background: #111318; border-radius: 99px; overflow: hidden; }
+    .bar i { display: block; height: 100%; background: var(--blue); }
+    .bar i.down { background: var(--red); }
+    .streaks { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; text-align: center; }
+    .streaks .card { margin: 0; }
+    .streaks b { display: block; font-size: 22px; margin: 6px 0 2px; }
     .tabbar {
       position: fixed; left: 0; right: 0; bottom: 0;
-      display: grid; grid-template-columns: 1fr 1fr 1fr;
-      background: #061b1e; border-top: 1px solid var(--line);
-      padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
+      background: var(--nav); border-top: 1px solid var(--line);
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      padding: 8px 4px calc(8px + env(safe-area-inset-bottom));
     }
     .tabbar button {
-      border: 0; background: transparent; color: var(--mute);
-      font-family: "Chakra Petch", sans-serif; font-size: 12px; padding: 8px;
+      border: 0; background: none; color: #6b7280;
+      font-size: 10px; font-weight: 600;
+      display: grid; justify-items: center; gap: 4px;
     }
-    .tabbar button.on { color: var(--watch); }
-    .hidden { display: none; }
-    .note { font-size: 13px; color: var(--mute); line-height: 1.45; }
+    .tabbar button.on { color: #fff; }
+    .fab {
+      position: fixed; right: 18px; bottom: calc(78px + env(safe-area-inset-bottom));
+      width: 52px; height: 52px; border: 0; border-radius: 14px;
+      background: var(--blue); color: #fff; font-size: 28px; line-height: 1;
+      box-shadow: 0 8px 20px rgba(59,130,246,.35);
+    }
+    .hidden { display: none !important; }
+    .empty { color: var(--mute); font-size: 14px; padding: 8px 0; }
+    .lex details { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 0 14px; margin-bottom: 8px; }
+    .lex summary { padding: 14px 0; font-weight: 600; cursor: pointer; }
+    .lex dt { color: var(--blue); font-size: 12px; font-weight: 700; margin-top: 10px; }
+    .lex dd { margin: 4px 0 0; color: #d1d5db; font-size: 14px; line-height: 1.45; }
+    .lex dl { margin: 0 0 12px; }
+    svg.eq { width: 100%; height: 140px; display: block; }
   </style>
 </head>
 <body>
-  <div class="top">
-    <h1 id="page-title">Accueil</h1>
-    <span class="when" id="clock">—</span>
-  </div>
+  <header class="bar">
+    <div class="avatar">YG</div>
+    <h1 id="page-title">Dashboard</h1>
+    <div class="logo" aria-hidden="true">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2"><path d="M4 16l5-5 4 4 7-8"/></svg>
+    </div>
+  </header>
 
   <section id="view-home">
-    <div class="clip" aria-hidden="true"></div>
-    <div class="badge idle" id="badge">
-      <div class="kicker">PAPER · OKX · ICT 2022</div>
-      <h2 id="stamp">…</h2>
-      <p id="sub">Chargement</p>
+    <div class="card">
+      <div class="label">Total P&amp;L</div>
+      <div class="pnl flat" id="pnl">$0.00</div>
+      <div class="delta flat" id="pnl-delta">Paper · no closed trades yet</div>
     </div>
-    <div class="metrics" id="metrics"></div>
-    <div id="pairs"></div>
-    <div class="section">Derniers events</div>
-    <div id="home-tape"></div>
+    <div class="row2">
+      <div class="card">
+        <div class="label">Win rate</div>
+        <div class="stat" id="wr">—</div>
+        <div class="hint">Closed paper trades</div>
+      </div>
+      <div class="card">
+        <div class="label">Profit factor</div>
+        <div class="stat" id="pf">—</div>
+        <div class="hint">Gross win / gross loss</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="sec" style="margin:0 0 8px">
+        <h2>Equity growth</h2>
+        <span class="chip">Paper</span>
+      </div>
+      <svg class="eq" id="eq" viewBox="0 0 320 140" preserveAspectRatio="none"></svg>
+    </div>
+    <div class="sec">
+      <h2>Recent trades</h2>
+      <button class="link" type="button" id="view-all">View all</button>
+    </div>
+    <div id="recent"></div>
   </section>
 
   <section id="view-history" class="hidden">
-    <input class="search" id="q" type="search" placeholder="BTC, ETH, veto, fill…" />
+    <div class="search-wrap">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3-3"/></svg>
+      <input class="search" id="q" type="search" placeholder="Search symbol or status…" />
+    </div>
     <div class="pills" id="pills">
-      <button type="button" data-f="all" class="on">Tout</button>
-      <button type="button" data-f="open">Ouverts</button>
-      <button type="button" data-f="fill">Fills</button>
-      <button type="button" data-f="veto">Vetos</button>
-      <button type="button" data-f="close">Clôturés</button>
+      <button type="button" data-f="all" class="on">All trades</button>
+      <button type="button" data-f="completed">Completed</button>
+      <button type="button" data-f="open">Open</button>
+      <button type="button" data-f="veto">Vetoed</button>
     </div>
     <div id="history"></div>
   </section>
 
+  <section id="view-charts" class="hidden">
+    <div class="sec" style="margin-top:0">
+      <h2>Analytics</h2>
+      <span class="chip">All time</span>
+    </div>
+    <div class="card">
+      <div class="donut-wrap">
+        <div class="donut-box">
+          <svg width="180" height="180" viewBox="0 0 180 180" id="donut"></svg>
+          <div class="donut-label"><b id="donut-pct">—</b><span id="donut-wl" class="hint">0 W / 0 L</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="mgrid" id="mgrid"></div>
+    <div class="sec"><h2>Profit by strategy</h2></div>
+    <div class="card" id="strategies"></div>
+    <div class="sec"><h2>Streaks</h2></div>
+    <div class="streaks" id="streaks"></div>
+  </section>
+
   <section id="view-settings" class="hidden">
-    <p class="note">Paper seulement. Aucun ordre OKX. Le desk scanne toutes les 10 min depuis GitHub, même PC éteint.</p>
-    <div class="section">Lexique</div>
+    <div class="card">
+      <div class="label">Mode</div>
+      <div class="stat" style="font-size:20px">Paper only</div>
+      <p class="hint">No live OKX orders. Scans every 10 minutes from GitHub. P&amp;L stays $0 until a 6/6 fill closes.</p>
+    </div>
     <div class="lex">
       <details open>
-        <summary>Sur le blotter</summary>
+        <summary>On the blotter</summary>
         <dl>
-          <dt>Paper</dt><dd>On fait semblant. L’argent ne bouge pas.</dd>
-          <dt>Stand down</dt><dd>On ne prend rien. Au moins une des 6 conditions manque.</dd>
-          <dt>In paper / fill</dt><dd>Les 6 feux sont verts : entrée, stop et cible fictifs.</dd>
-          <dt>6/6</dt><dd>Les six filtres doivent être verts ensemble. 5/6 = on passe.</dd>
-          <dt>Veto</dt><dd>Un filtre a dit non.</dd>
+          <dt>Paper</dt><dd>Simulated. No money moves.</dd>
+          <dt>Stand down / veto</dt><dd>At least one of the 6 filters failed. Normal.</dd>
+          <dt>Fill / In paper</dt><dd>All 6 filters green. Fictional entry, stop, target.</dd>
+          <dt>6/6</dt><dd>Every filter must pass. 5/6 is a no.</dd>
         </dl>
       </details>
       <details>
-        <summary>Les 6 filtres</summary>
+        <summary>The 6 filters</summary>
         <dl>
-          <dt>htf bias</dt><dd>Direction semaine + jour. Pas d’accord → stand down.</dd>
-          <dt>draw</dt><dd>La cible : un vieux haut ou bas (liquidité).</dd>
-          <dt>amd</dt><dd>On n’entre qu’en delivery, après le piège (sweep).</dd>
-          <dt>session</dt><dd>Asie / Londres / NY. Dead zone = veto.</dd>
-          <dt>pd array</dt><dd>Zone d’entrée : FVG 15 minutes du bon côté.</dd>
-          <dt>risk</dt><dd>R:R au moins 2. Une position à la fois. Pas 5 pertes d’affilée.</dd>
+          <dt>htf bias</dt><dd>Weekly + daily direction must agree.</dd>
+          <dt>draw</dt><dd>The liquidity target (old high or low).</dd>
+          <dt>amd</dt><dd>Enter only in delivery, after the sweep.</dd>
+          <dt>session</dt><dd>Asia / London / NY. Dead zone = veto.</dd>
+          <dt>pd array</dt><dd>15m FVG on the right side of the range.</dd>
+          <dt>risk</dt><dd>R:R at least 2. One position. No 5-loss streak.</dd>
         </dl>
       </details>
       <details>
-        <summary>Acheter, vendre, sortir</summary>
+        <summary>ICT, short</summary>
         <dl>
-          <dt>Long</dt><dd>On gagne si ça monte.</dd>
-          <dt>Short</dt><dd>On gagne si ça baisse.</dd>
-          <dt>SL</dt><dd>Stop : on coupe ici si on a tort.</dd>
-          <dt>TP</dt><dd>Cible : on sort ici si on a raison.</dd>
-          <dt>R:R</dt><dd>Viser au moins 2 fois ce qu’on risque.</dd>
-        </dl>
-      </details>
-      <details>
-        <summary>ICT, vite</summary>
-        <dl>
-          <dt>Sweep / Judas</dt><dd>Le prix casse un haut/bas puis revient. C’est le piège.</dd>
-          <dt>FVG</dt><dd>Trou de prix entre 3 bougies. Zone d’entrée.</dd>
-          <dt>PDH / PDL</dt><dd>Plus haut / plus bas de la veille (New York).</dd>
-          <dt>Silver Bullet</dt><dd>Le modèle de base : fenêtre de séance, sweep, FVG.</dd>
+          <dt>Long / Short</dt><dd>Win if price goes up / down.</dd>
+          <dt>SL / TP</dt><dd>Stop if wrong. Target if right.</dd>
+          <dt>Sweep</dt><dd>Price takes stops, then reverses. That’s the trap.</dd>
+          <dt>FVG</dt><dd>A gap between three candles. Entry zone.</dd>
         </dl>
       </details>
     </div>
   </section>
 
+  <button class="fab" type="button" id="fab" aria-label="History">+</button>
+
   <nav class="tabbar">
-    <button type="button" data-view="home" class="on">Accueil</button>
-    <button type="button" data-view="history">Historique</button>
-    <button type="button" data-view="settings">Réglages</button>
+    <button type="button" data-view="home" class="on">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      Home
+    </button>
+    <button type="button" data-view="history">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+      History
+    </button>
+    <button type="button" data-view="charts">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V5M4 19h16M8 15l3-4 3 2 5-7"/></svg>
+      Charts
+    </button>
+    <button type="button" data-view="settings">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4"/></svg>
+      Settings
+    </button>
   </nav>
 
   <script>
-    const CHECKS = ["htf_bias", "draw", "amd", "session", "pd_array", "risk"];
-    const LABELS = { htf_bias: "biais", draw: "draw", amd: "amd", session: "session", pd_array: "fvg", risk: "risque" };
-    const TITLES = { home: "Accueil", history: "Historique", settings: "Réglages" };
-    let DATA = null;
-    let filter = "all";
-    let query = "";
+    const TITLES = { home: "Dashboard", history: "Trade History", charts: "Analytics", settings: "Settings" };
+    const START = 10000;
+    const RISK = 50;
+    let DATA = null, filter = "all", query = "";
 
-    const fmtTime = (iso) => {
-      if (!iso) return "—";
-      return new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Africa/Abidjan" }) + " ABI";
+    const money = (n) => {
+      const sign = n > 0 ? "+" : n < 0 ? "−" : "";
+      return sign + "$" + Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     };
-    const fmtDay = (iso) => new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "long", timeZone: "Africa/Abidjan" });
-    const passedCount = (ev) => Math.max(0, 6 - (ev.missing || []).length);
-    const pair = (id) => (id || "").replace("-USDT", "");
+    const pair = (id) => (id || "").replace("-USDT", "/USDT");
+    const ago = (iso) => {
+      if (!iso) return "";
+      const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+      if (m < 60) return m + "m ago";
+      if (m < 1440) return Math.round(m / 60) + "h ago";
+      return Math.round(m / 1440) + "d ago";
+    };
+    const dayLabel = (iso) => new Date(iso).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "Africa/Abidjan" });
 
-    function kindOf(ev) {
-      if (ev.type === "paper_fill") return "fill";
-      if (ev.type === "stand_down") return "veto";
-      if (ev.type === "paper_close") return ev.result === "win" ? "win" : "loss";
-      if (ev.type === "error") return "err";
-      return ev.type || "—";
-    }
-    function kindLabel(ev) {
-      const k = kindOf(ev);
-      return { fill: "fill", veto: "veto", win: "win", loss: "loss", err: "erreur" }[k] || k;
+    function analytics() {
+      const closes = (DATA.feed || []).filter((e) => e.type === "paper_close").reverse();
+      const wins = closes.filter((e) => e.result === "win");
+      const losses = closes.filter((e) => e.result === "loss");
+      const wr = closes.length ? wins.length / closes.length : null;
+      const winR = wins.reduce((s, e) => s + Number(e.r || 0), 0);
+      const lossR = Math.abs(losses.reduce((s, e) => s + Number(e.r || 0), 0));
+      const pf = lossR ? winR / lossR : (winR ? Infinity : null);
+      const avgW = wins.length ? wins.reduce((s, e) => s + Number(e.r || 0) * RISK, 0) / wins.length : null;
+      const avgL = losses.length ? losses.reduce((s, e) => s + Number(e.r || 0) * RISK, 0) / losses.length : null;
+      const maxW = wins.length ? Math.max(...wins.map((e) => Number(e.r || 0) * RISK)) : null;
+      let eq = START, peak = START, maxDd = 0;
+      const curve = [START];
+      let streak = 0, maxWstreak = 0, maxLstreak = 0, cur = 0;
+      closes.forEach((e) => {
+        eq += Number(e.r || 0) * RISK;
+        curve.push(eq);
+        peak = Math.max(peak, eq);
+        maxDd = Math.min(maxDd, eq - peak);
+        if (e.result === "win") {
+          streak = streak >= 0 ? streak + 1 : 1;
+          maxWstreak = Math.max(maxWstreak, streak);
+        } else {
+          streak = streak <= 0 ? streak - 1 : -1;
+          maxLstreak = Math.max(maxLstreak, -streak);
+        }
+        cur = streak;
+      });
+      const pnl = eq - START;
+      return { closes, wins, losses, wr, pf, avgW, avgL, maxW, maxDd, curve, pnl, maxWstreak, maxLstreak, cur };
     }
 
-    function eventCard(ev) {
+    function drawEquity(curve) {
+      const svg = document.getElementById("eq");
+      const pts = curve.length < 2 ? [START, START] : curve;
+      const min = Math.min(...pts), max = Math.max(...pts);
+      const span = max - min || 1;
+      const w = 320, h = 140, p = 10;
+      const xy = pts.map((v, i) => {
+        const x = p + (i / (pts.length - 1)) * (w - p * 2);
+        const y = h - p - ((v - min) / span) * (h - p * 2);
+        return [x, y];
+      });
+      const d = xy.map((c, i) => (i ? "L" : "M") + c[0].toFixed(1) + " " + c[1].toFixed(1)).join(" ");
+      const last = xy[xy.length - 1];
+      svg.innerHTML = `<path d="${d} L ${w - p} ${h} L ${p} ${h} Z" fill="url(#g)"/>
+        <path d="${d}" fill="none" stroke="#e5e7eb" stroke-width="2"/>
+        <circle cx="${last[0]}" cy="${last[1]}" r="4" fill="#fff"/>
+        <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3b82f6" stop-opacity=".25"/><stop offset="1" stop-color="#3b82f6" stop-opacity="0"/></linearGradient></defs>`;
+    }
+
+    function drawDonut(pct) {
+      const r = 70, c = 2 * Math.PI * r, p = pct == null ? 0 : pct;
+      document.getElementById("donut").innerHTML = `
+        <circle cx="90" cy="90" r="${r}" fill="none" stroke="#2a2b32" stroke-width="14"/>
+        <circle cx="90" cy="90" r="${r}" fill="none" stroke="#3b82f6" stroke-width="14"
+          stroke-dasharray="${(p * c).toFixed(1)} ${c.toFixed(1)}" stroke-linecap="round"
+          transform="rotate(-90 90 90)"/>`;
+    }
+
+    function recentItem(ev) {
+      const pos = ev.position || {};
+      const r = ev.r != null ? Number(ev.r) * RISK : 0;
+      const up = ev.result === "win" || (ev.type === "paper_fill" && !ev.result);
+      const pnl = ev.type === "paper_close" ? `<div class="money ${r >= 0 ? "up" : "down"}">${money(r)}</div>` : `<div class="hint">${ago(ev.logged_at)}</div>`;
+      return `<div class="card">
+        <div class="trade">
+          <div class="ico">${(ev.inst_id || "??").slice(0, 3)}</div>
+          <div>
+            <h3>${pair(ev.inst_id)}</h3>
+            <div class="sub">${(pos.bias || ev.bias || "—")} · paper · ${ago(ev.logged_at)}</div>
+          </div>
+          ${pnl}
+          <div class="prices"><span>Entry: ${pos.entry ? Number(pos.entry).toFixed(1) : "—"}</span><span>Exit: ${ev.last != null && ev.type === "paper_close" ? Number(ev.last).toFixed(1) : "—"}</span></div>
+        </div>
+      </div>`;
+    }
+
+    function historyCard(ev) {
       const open = DATA.open || {};
       const isOpen = ev.type === "paper_fill" && open[ev.inst_id];
-      const tag = isOpen ? "open" : kindOf(ev);
-      const tagText = isOpen ? "ouvert" : kindLabel(ev);
-      const pos = ev.position || open[ev.inst_id];
-      const detail = ev.missing?.length
-        ? `manque ${ev.missing.join(" · ")}`
-        : pos
-          ? `${pos.bias} @ ${Number(pos.entry).toFixed(2)} → ${Number(pos.target).toFixed(2)}`
-          : ev.error || ev.bias || "";
+      const pos = ev.position || open[ev.inst_id] || {};
+      const status = isOpen ? "open" : ev.type === "paper_close" ? "filled" : ev.type === "stand_down" ? "veto" : "filled";
+      const statusText = isOpen ? "Open" : ev.type === "paper_close" ? "Filled" : ev.type === "stand_down" ? "Vetoed" : ev.type;
+      const side = (pos.bias || ev.bias || "") === "short" ? "SELL" : (pos.bias || ev.bias) === "long" ? "BUY" : "—";
       const reasons = (ev.reasons || []).map((r) => `<div>${r}</div>`).join("");
-      return `<article class="card">
-        <header>
-          <h3>${pair(ev.inst_id)}</h3>
-          <span class="tag ${tag}">${tagText}</span>
-        </header>
-        <div class="side">${ev.last != null ? Number(ev.last).toLocaleString("en-US") : ""} ${ev.bias && ev.bias !== "unclear" ? ev.bias : ""}</div>
-        <div class="meta">${fmtTime(ev.logged_at)} · ${detail}</div>
-        ${reasons ? `<details><summary>Détails 6/6</summary>${reasons}</details>` : ""}
+      const actions = isOpen
+        ? `<div class="actions"><button class="ghost" type="button" disabled>Modify</button><button class="danger" type="button" disabled>Cancel order</button></div>`
+        : `<details class="more"><summary>View details</summary>${reasons || ev.error || "No extra notes."}</details>`;
+      return `<article class="card hcard">
+        <div class="top">
+          <div><div class="sym">${pair(ev.inst_id)}</div><div class="kind">Crypto · ICT paper</div></div>
+          <div class="status ${status}">${statusText}</div>
+        </div>
+        <div class="grid">
+          <div><span>Side</span><div class="side ${side === "SELL" ? "sell" : "buy"}">${side}</div></div>
+          <div><span>${isOpen ? "Limit" : "Price"}</span><div>${ev.last != null ? Number(ev.last).toLocaleString("en-US") : "—"}</div></div>
+          <div><span>Time</span><div>${ago(ev.logged_at)}</div></div>
+          <div><span>${ev.type === "stand_down" ? "Missing" : "R:R"}</span><div>${ev.missing ? ev.missing.join(", ") : (pos.rr != null ? Number(pos.rr).toFixed(2) : "—")}</div></div>
+        </div>
+        ${actions}
       </article>`;
     }
 
-    function renderHome() {
-      const open = DATA.open || {};
-      const s = DATA.stats || {};
-      const openCount = Object.keys(open).length;
-      const badge = document.getElementById("badge");
-      if (openCount) {
-        badge.className = "badge open";
-        document.getElementById("stamp").textContent = "IN PAPER";
-        document.getElementById("sub").textContent = Object.keys(open).map(pair).join(" · ") + " — session, close today";
-      } else {
-        badge.className = "badge stand";
-        document.getElementById("stamp").textContent = "STAND DOWN";
-        document.getElementById("sub").textContent = "6/6 obligatoire · paper only";
-      }
-      const wr = s.win_rate == null ? "—" : Math.round(s.win_rate * 100) + "%";
-      const r = s.avg_r == null ? "—" : Number(s.avg_r).toFixed(2);
-      document.getElementById("metrics").innerHTML = `
-        <div class="metric"><b>${s.fills || 0}</b><span>FILLS</span></div>
-        <div class="metric"><b>${s.stand_downs || 0}</b><span>VETOS</span></div>
-        <div class="metric"><b>${wr}</b><span>WIN RATE · R ${r}</span></div>`;
-
-      document.getElementById("pairs").innerHTML = ["BTC-USDT", "ETH-USDT"].map((id) => {
-        const ev = (DATA.latest || {})[id];
-        const pos = open[id];
-        if (!ev && !pos) return `<article class="pair"><header><h3>${pair(id)}</h3></header><p class="empty">Pas encore de fiche.</p></article>`;
-        const n = ev ? passedCount(ev) : 6;
-        const missing = new Set(ev?.missing || []);
-        const chips = CHECKS.map((c) => `<span class="chip ${ev && !missing.has(c) ? "ok" : "no"}">${LABELS[c]}</span>`).join("");
-        const posHtml = pos
-          ? `<div class="pos">${pos.bias} @ ${Number(pos.entry).toFixed(2)}<br>SL ${Number(pos.stop).toFixed(2)} → TP ${Number(pos.target).toFixed(2)}</div>`
-          : "";
-        return `<article class="pair">
-          <header><h3>${pair(id)}</h3><span class="px">${ev?.last != null ? Number(ev.last).toLocaleString("en-US") : ""}</span></header>
-          <div class="frac">${n}<span>/6</span> ${ev?.bias || pos?.bias || ""}</div>
-          <div class="chips">${chips}</div>${posHtml}
-        </article>`;
-      }).join("");
-
-      const recent = (DATA.feed || []).slice(0, 5);
-      document.getElementById("home-tape").innerHTML = recent.length
-        ? recent.map(eventCard).join("")
-        : `<p class="empty">Aucun event pour l’instant.</p>`;
-    }
-
     function matches(ev) {
-      const k = kindOf(ev);
       const open = DATA.open || {};
+      if (filter === "completed" && ev.type !== "paper_close") return false;
       if (filter === "open" && !(ev.type === "paper_fill" && open[ev.inst_id])) return false;
-      if (filter === "fill" && ev.type !== "paper_fill") return false;
       if (filter === "veto" && ev.type !== "stand_down") return false;
-      if (filter === "close" && ev.type !== "paper_close") return false;
+      if (filter === "all" && ev.type === "error") return false;
       if (!query) return true;
-      const blob = `${ev.inst_id} ${ev.type} ${kindLabel(ev)} ${(ev.missing || []).join(" ")} ${ev.bias || ""}`.toLowerCase();
-      return blob.includes(query);
-    }
-
-    function renderHistory() {
-      const rows = (DATA.feed || []).filter(matches);
-      if (!rows.length) {
-        document.getElementById("history").innerHTML = `<p class="empty">Rien dans ce filtre. Les fills apparaîtront ici après un 6/6.</p>`;
-        return;
-      }
-      const groups = {};
-      rows.forEach((ev) => {
-        const key = fmtDay(ev.logged_at);
-        (groups[key] ||= []).push(ev);
-      });
-      document.getElementById("history").innerHTML = Object.entries(groups).map(([day, list]) =>
-        `<div class="month">${day}</div>${list.map(eventCard).join("")}`
-      ).join("");
-    }
-
-    function show(view) {
-      ["home", "history", "settings"].forEach((v) => {
-        document.getElementById("view-" + v).classList.toggle("hidden", v !== view);
-        document.querySelector(`.tabbar [data-view="${v}"]`).classList.toggle("on", v === view);
-      });
-      document.getElementById("page-title").textContent = TITLES[view];
-      location.hash = view === "home" ? "" : view;
+      return `${ev.inst_id} ${ev.type} ${ev.bias} ${(ev.missing || []).join(" ")}`.toLowerCase().includes(query);
     }
 
     function render() {
       if (!DATA) return;
-      document.getElementById("clock").textContent = fmtTime(DATA.last_scan || DATA.generated_at);
-      renderHome();
-      renderHistory();
+      const a = analytics();
+      const pnlEl = document.getElementById("pnl");
+      pnlEl.textContent = money(a.pnl);
+      pnlEl.className = "pnl " + (a.pnl > 0 ? "" : a.pnl < 0 ? "neg" : "flat");
+      document.getElementById("pnl-delta").textContent = a.closes.length
+        ? `${a.closes.length} closed · paper $10,000 start`
+        : "Paper · no closed trades yet";
+      document.getElementById("pnl-delta").className = "delta " + (a.pnl ? "" : "flat");
+      document.getElementById("wr").textContent = a.wr == null ? "—" : (a.wr * 100).toFixed(1) + "%";
+      document.getElementById("pf").textContent = a.pf == null ? "—" : (a.pf === Infinity ? "∞" : a.pf.toFixed(2));
+      drawEquity(a.curve);
+
+      const recents = (DATA.feed || []).filter((e) => e.type === "paper_close" || e.type === "paper_fill").slice(0, 4);
+      const fallback = (DATA.feed || []).filter((e) => e.type !== "error").slice(0, 4);
+      const list = recents.length ? recents : fallback;
+      document.getElementById("recent").innerHTML = list.length
+        ? list.map(recentItem).join("")
+        : `<p class="empty">No trades yet. Vetos stay in History until a 6/6 fill.</p>`;
+
+      const rows = (DATA.feed || []).filter(matches);
+      if (!rows.length) {
+        document.getElementById("history").innerHTML = `<p class="empty">Nothing in this filter.</p>`;
+      } else {
+        const groups = {};
+        rows.forEach((e) => { (groups[dayLabel(e.logged_at)] ||= []).push(e); });
+        document.getElementById("history").innerHTML = Object.entries(groups)
+          .map(([m, items]) => `<div class="month">${m}</div>${items.map(historyCard).join("")}`).join("");
+      }
+
+      const pct = a.wr;
+      drawDonut(pct);
+      document.getElementById("donut-pct").textContent = pct == null ? "—" : Math.round(pct * 100) + "%";
+      document.getElementById("donut-wl").textContent = `${a.wins.length} W / ${a.losses.length} L`;
+      const cell = (k, v, cls = "") => `<div class="card"><div class="label">${k}</div><div class="stat ${cls}" style="font-size:22px">${v}</div></div>`;
+      document.getElementById("mgrid").innerHTML =
+        cell("Profit factor", a.pf == null ? "—" : a.pf === Infinity ? "∞" : a.pf.toFixed(2)) +
+        cell("Total trades", String(a.closes.length)) +
+        cell("Avg win", a.avgW == null ? "—" : money(a.avgW), "money up") +
+        cell("Avg loss", a.avgL == null ? "—" : money(a.avgL), "money down") +
+        cell("Max win", a.maxW == null ? "—" : money(a.maxW), "money up") +
+        cell("Max drawdown", a.maxDd ? money(a.maxDd) : "$0.00", "money down");
+
+      const ictPnl = a.pnl;
+      const w = Math.min(100, Math.abs(ictPnl) / 50 * 10 + (ictPnl ? 40 : 8));
+      document.getElementById("strategies").innerHTML = `<div class="bar-row">
+        <div>ICT 2022</div><div class="bar"><i class="${ictPnl < 0 ? "down" : ""}" style="width:${w}%"></i></div>
+        <div class="${ictPnl < 0 ? "money down" : "money up"}">${money(ictPnl)}</div>
+      </div>`;
+      document.getElementById("streaks").innerHTML = `
+        <div class="card"><b style="color:var(--blue)">${a.maxWstreak}</b><div class="label">Max wins</div></div>
+        <div class="card"><b style="color:var(--red)">${a.maxLstreak}</b><div class="label">Max losses</div></div>
+        <div class="card"><b style="color:var(--blue)">${a.cur}</b><div class="label">Current</div></div>`;
+    }
+
+    function show(view) {
+      ["home", "history", "charts", "settings"].forEach((v) => {
+        document.getElementById("view-" + v).classList.toggle("hidden", v !== view);
+        document.querySelector(`.tabbar [data-view="${v}"]`).classList.toggle("on", v === view);
+      });
+      document.getElementById("page-title").textContent = TITLES[view];
+      document.getElementById("fab").classList.toggle("hidden", view !== "home");
+      location.hash = view === "home" ? "" : view;
     }
 
     async function load() {
@@ -396,23 +503,19 @@
       render();
     }
 
-    document.querySelectorAll(".tabbar button").forEach((btn) => {
-      btn.addEventListener("click", () => show(btn.dataset.view));
-    });
+    document.querySelectorAll(".tabbar button").forEach((b) => b.addEventListener("click", () => show(b.dataset.view)));
+    document.getElementById("view-all").addEventListener("click", () => show("history"));
+    document.getElementById("fab").addEventListener("click", () => show("history"));
     document.getElementById("pills").addEventListener("click", (e) => {
-      const btn = e.target.closest("button");
-      if (!btn) return;
-      filter = btn.dataset.f;
-      document.querySelectorAll("#pills button").forEach((b) => b.classList.toggle("on", b === btn));
-      renderHistory();
+      const b = e.target.closest("button");
+      if (!b) return;
+      filter = b.dataset.f;
+      document.querySelectorAll("#pills button").forEach((x) => x.classList.toggle("on", x === b));
+      render();
     });
-    document.getElementById("q").addEventListener("input", (e) => {
-      query = e.target.value.trim().toLowerCase();
-      renderHistory();
-    });
-
+    document.getElementById("q").addEventListener("input", (e) => { query = e.target.value.trim().toLowerCase(); render(); });
     const start = (location.hash || "").replace("#", "");
-    if (["history", "settings"].includes(start)) show(start);
+    if (TITLES[start]) show(start);
     load();
     setInterval(load, 15000);
   </script>
