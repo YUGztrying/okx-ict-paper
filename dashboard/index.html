@@ -303,12 +303,15 @@
     <div class="card">
       <div class="label">Mode</div>
       <div class="stat" style="font-size:20px">Paper only</div>
-      <p class="hint">No live OKX orders. Watches each closed 15m bar and open SL/TP from GitHub. ICT 2022 is strict (6/6). Fabio AAA is a looser session value-area fade, paper-only, from the WOR live NY session — not his order-flow.</p>
+      <p class="hint">No live OKX orders. Enters on a confirmed 15m close. Open paper is marked on the public OKX ticker. ICT 2022 is strict (6/6). Fabio AAA is a looser session value-area fade, paper-only, from the WOR live NY session — not his order-flow.</p>
     </div>
     <div class="lex">
       <details open>
         <summary>On the blotter</summary>
         <dl>
+          <dt>Enter</dt><dd>Only after the 15m candle confirms closed. Mid-bar is not a setup.</dd>
+          <dt>Exit</dt><dd>First last-print through stop or target. Stop wins if a gap tags both.</dd>
+          <dt>Cloud</dt><dd>GitHub sits the public socket ~5h20, pushes the journal, then the next job takes over. PC can be off.</dd>
           <dt>Paper</dt><dd>Simulated. No money moves.</dd>
           <dt>Stand down / veto</dt><dd>At least one of the 6 filters failed. Normal.</dd>
           <dt>Fill / In paper</dt><dd>All 6 filters green. Fictional entry, stop, target.</dd>

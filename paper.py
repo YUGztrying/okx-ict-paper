@@ -9,11 +9,15 @@ import time
 import tomllib
 from datetime import datetime, timezone
 from pathlib import Path
+from queue import Empty
 
 from fabio.model import analyze as analyze_fabio
 from ict.journal import append, consecutive_losses, load_open, save_open, stats, write_desk
 from ict.model import Fiche, analyze as analyze_ict
-from ict.okx_data import closed_candle, fetch_candles, fetch_last, seconds_until_bar_close
+from ict.cloud import dispatch_next, persist_enabled, persist_journal
+from ict.exits import exit_result, realized_r
+from ict.okx_data import closed_candle, fetch_candles, fetch_last
+from ict.okx_ws import BarClose, PublicFeed, Tick, is_decision_bar
 from ict.sizing import position_size
 
 ROOT = Path(__file__).resolve().parent
@@ -24,30 +28,19 @@ def load_config() -> dict:
         return tomllib.load(fh)
 
 
-def update_open(cfg: dict, book: str) -> None:
+def update_open(cfg: dict, book: str, marks: dict[str, float] | None = None) -> bool:
     open_state = load_open(book)
     changed = False
     for inst_id, pos in list(open_state.items()):
-        last = fetch_last(inst_id)
-        stop = float(pos["stop"])
-        target = float(pos["target"])
-        entry = float(pos["entry"])
-        side = pos["bias"]
-        hit = None
-        if side == "long":
-            if last <= stop:
-                hit = "loss"
-            elif last >= target:
-                hit = "win"
-        else:
-            if last >= stop:
-                hit = "loss"
-            elif last <= target:
-                hit = "win"
+        try:
+            last = float(marks[inst_id]) if marks and inst_id in marks else fetch_last(inst_id)
+        except Exception as exc:
+            print(f"[{book}] {inst_id}: mark error {exc}", file=sys.stderr)
+            continue
+        hit = exit_result(pos["bias"], last, float(pos["stop"]), float(pos["target"]))
         if not hit:
             continue
-        risk = abs(entry - stop)
-        r = (abs(target - entry) / risk) if hit == "win" and risk else (-1.0 if hit == "loss" else 0.0)
+        r = realized_r(float(pos["entry"]), float(pos["stop"]), float(pos["target"]), hit)
         append(
             {
                 "type": "paper_close",
@@ -64,6 +57,9 @@ def update_open(cfg: dict, book: str) -> None:
         print(f"[{book}] CLOSED {inst_id} {hit} @ {last}  R={r:.2f}")
     if changed:
         save_open(open_state, book)
+        write_desk()
+        persist_journal(f"paper {book} close")
+    return changed
 
 
 def maybe_fill(fiche: Fiche, cfg: dict, book: str) -> None:
@@ -146,28 +142,60 @@ def print_status() -> None:
         print(f"{book}: fills={s['fills']} vetos={s['stand_downs']} wr={wr} open={list(s['open'])}")
 
 
+def mark_all(cfg: dict, marks: dict[str, float] | None = None) -> None:
+    for book in ("ict", "fabio"):
+        update_open(cfg, book, marks)
+
+
+def rest_marks(cfg: dict) -> dict[str, float]:
+    marks: dict[str, float] = {}
+    needed = set()
+    for book in ("ict", "fabio"):
+        needed.update(load_open(book).keys())
+    if not needed:
+        needed.update(cfg["instruments"])
+    for inst in needed:
+        try:
+            marks[inst] = fetch_last(inst)
+        except Exception as exc:
+            print(f"{inst}: ticker error {exc}", file=sys.stderr)
+    return marks
+
+
 def any_open() -> bool:
     return bool(load_open("ict") or load_open("fabio"))
 
 
-def latest_closed(inst: str, cfg: dict) -> int | None:
-    candles = fetch_candles(inst, cfg["entry_bar"], 4)
-    closed = closed_candle(candles, cfg["entry_bar"])
-    return closed.ts if closed else None
+def seed_seen_closes(instruments: list[str], bar: str) -> dict[str, int]:
+    """Remember the bar the start tick already decided on. 0 = seed failed."""
+    seen: dict[str, int] = {}
+    for inst in instruments:
+        try:
+            closed = closed_candle(fetch_candles(inst, bar, 4), bar)
+            seen[inst] = closed.ts if closed else 0
+        except Exception as exc:
+            print(f"{inst}: close-seed error {exc}", file=sys.stderr)
+            seen[inst] = 0
+    return seen
 
 
-def tick(cfg: dict) -> None:
+def hand_off_watch() -> bool:
+    """Push journal first. The next runner must not checkout a stale blotter."""
+    write_desk()
+    if persist_enabled() and not persist_journal("paper watch handoff"):
+        print("handoff persist failed — YAML will retry before chaining", file=sys.stderr)
+        return False
+    return dispatch_next()
+
+
+def tick(cfg: dict, marks: dict[str, float] | None = None) -> None:
     print(f"\n=== {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')} ===")
-    for book in ("ict", "fabio"):
-        update_open(cfg, book)
+    mark_all(cfg, marks)
     for inst in cfg["instruments"]:
-        hourly = None
-        entry = None
-        last = None
         try:
             hourly = fetch_candles(inst, cfg["htf_bar"], int(cfg["htf_limit"]))
             entry = fetch_candles(inst, cfg["entry_bar"], int(cfg["entry_limit"]))
-            last = fetch_last(inst)
+            last = float(marks[inst]) if marks and inst in marks else fetch_last(inst)
         except Exception as exc:
             print(f"{inst}: error {exc}", file=sys.stderr)
             append({"type": "error", "inst_id": inst, "error": str(exc)}, book="ict")
@@ -194,64 +222,68 @@ def tick(cfg: dict) -> None:
             append({"type": "error", "inst_id": inst, "error": str(exc)}, book="fabio")
             print(f"[fabio] {inst}: error {exc}", file=sys.stderr)
     write_desk()
+    persist_journal("paper scan")
 
 
-def watch(cfg: dict, minutes: float, pulse: float = 12.0) -> None:
-    """Stay awake: close paper on SL/TP ticks, enter only on a new closed 15m bar."""
+def watch(cfg: dict, minutes: float, chain_after: float = 0) -> None:
+    """Desk loop: WS last for SL/TP, confirmed 15m close for entries."""
     deadline = time.time() + minutes * 60 if minutes > 0 else None
-    seen: dict[str, int] = {}
-    tick(cfg)
-    for inst in cfg["instruments"]:
-        try:
-            ts = latest_closed(inst, cfg)
-            if ts is not None:
-                seen[inst] = ts
-        except Exception as exc:
-            print(f"{inst}: close-seed error {exc}", file=sys.stderr)
+    chain_at = time.time() + chain_after * 60 if chain_after > 0 else None
+    marks: dict[str, float] = {}
+    chained = False
+    last_watchdog = 0.0
+    last_desk = 0.0
+    last_handoff = 0.0
     bar = cfg["entry_bar"]
-    print(f"watch {bar} closes + SL/TP every {pulse:.0f}s — no live orders")
-    while deadline is None or time.time() < deadline:
-        remaining = (deadline - time.time()) if deadline else pulse
-        if remaining <= 0:
-            break
-        wait = min(pulse, remaining)
-        if not any_open():
-            wait = min(wait, max(1.0, seconds_until_bar_close(bar) + 2.0))
-            if deadline:
-                wait = min(wait, max(0.5, deadline - time.time()))
-        time.sleep(wait)
-        if deadline is not None and time.time() >= deadline:
-            break
-        new_close = False
-        for inst in cfg["instruments"]:
+    feed = PublicFeed(list(cfg["instruments"]), bar)
+    feed.start()
+    if not feed.connected.wait(15):
+        print("WS not up yet — REST marks until it is", file=sys.stderr)
+    tick(cfg)
+    seen_close = seed_seen_closes(list(cfg["instruments"]), bar)
+    persist_journal("paper watch start")
+    print(f"watch WS tickers + {bar} confirm=1 — no live orders")
+    try:
+        while deadline is None or time.time() < deadline:
             try:
-                ts = latest_closed(inst, cfg)
-            except Exception as exc:
-                print(f"{inst}: error {exc}", file=sys.stderr)
-                continue
-            if ts is None:
-                continue
-            if seen.get(inst) != ts:
-                if inst in seen:
-                    print(f"{inst}: new {bar} close")
-                    new_close = True
-                seen[inst] = ts
-        for book in ("ict", "fabio"):
-            try:
-                update_open(cfg, book)
-            except Exception as exc:
-                print(f"[{book}] mark error {exc}", file=sys.stderr)
-        if new_close:
-            tick(cfg)
-        elif any_open():
-            write_desk()
+                ev = feed.events.get(timeout=1.0)
+            except Empty:
+                ev = None
+            if isinstance(ev, Tick):
+                marks[ev.inst_id] = ev.last
+                mark_all(cfg, marks)
+            elif isinstance(ev, BarClose):
+                if is_decision_bar(ev.inst_id, ev.ts, seen_close):
+                    print(f"{ev.inst_id}: {bar} closed @ {ev.close}")
+                    marks[ev.inst_id] = ev.close
+                    tick(cfg, marks)
+            now = time.time()
+            if any_open() and feed.stale(8.0) and now - last_watchdog >= 2.0:
+                last_watchdog = now
+                marks.update(rest_marks(cfg))
+                mark_all(cfg, marks)
+            if any_open() and now - last_desk >= 120:
+                write_desk()
+                persist_journal("paper desk")
+                last_desk = now
+            if chain_at and not chained and now >= chain_at and now - last_handoff >= 30:
+                last_handoff = now
+                if hand_off_watch():
+                    chained = True
+                    break
+                print("handoff not ready — retry in 30s", file=sys.stderr)
+    finally:
+        feed.stop()
+        write_desk()
+        persist_journal("paper watch end")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Paper desk — ICT + Fabio AAA, no live orders")
     parser.add_argument("--loop", type=int, metavar="MIN", help="repeat a full scan every N minutes")
-    parser.add_argument("--watch", action="store_true", help="enter on 15m close, exit on SL/TP ticks")
+    parser.add_argument("--watch", action="store_true", help="WS last for SL/TP, confirmed 15m close for entries")
     parser.add_argument("--minutes", type=float, default=0, help="with --watch, stop after N minutes (0 = forever)")
+    parser.add_argument("--chain-after", type=float, default=0, help="dispatch the next GitHub watch after N minutes")
     parser.add_argument("--status", action="store_true")
     args = parser.parse_args()
     cfg = load_config()
@@ -261,7 +293,7 @@ def main() -> int:
         return 0
 
     if args.watch:
-        watch(cfg, args.minutes)
+        watch(cfg, args.minutes, args.chain_after)
         return 0
 
     tick(cfg)

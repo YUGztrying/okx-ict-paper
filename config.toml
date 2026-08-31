@@ -16,4 +16,5 @@ entry_limit = 96
 
 # Dead zone (UTC) is a hard veto. CI = GMT year-round.
 # Asia 00-08 score 3 | London 07-11 score 4 | NY 13-16 score 5
+# The watch loop sits the public WS; this value is only for --loop.
 loop_minutes = 10

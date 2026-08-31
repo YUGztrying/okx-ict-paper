@@ -1,12 +1,13 @@
 name: paper-scan
 
-# GitHub's */10 cron skips hours on public repos. Entries need a closed 15m bar;
-# exits need ticks. Watch ~8 min, then this job dispatches itself (GITHUB_TOKEN
-# may fire workflow_dispatch). Hourly cron is only a dead-man restart.
+# One writer. Public WS last for SL/TP; candle confirm=1 for entries.
+# ~5h20 watch (GitHub max 6h). Python persists the journal THEN chains.
+# YAML persist + dispatch is the safety net if the process dies first.
+# 6h cron is only a dead-man. GITHUB_TOKEN may fire workflow_dispatch.
 
 on:
   schedule:
-    - cron: "17 * * * *"
+    - cron: "17 */6 * * *"
   workflow_dispatch:
   push:
     branches: [main]
@@ -24,7 +25,7 @@ concurrency:
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 340
     steps:
       - uses: actions/checkout@v4
 
@@ -35,18 +36,22 @@ jobs:
       - name: Install
         run: pip install -r requirements.txt
 
-      - name: Watch 15m closes and open SL/TP
-        continue-on-error: true
-        run: python paper.py --watch --minutes 8
-
-      - name: Persist journal
-        if: always()
+      - name: Git identity for live journal pushes
         run: |
           git config user.name "okx-ict-paper"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add journal dashboard/desk.json
-          git diff --staged --quiet || git commit -m "paper scan"
-          git push
+
+      - name: Watch the desk
+        env:
+          PAPER_GIT_PUSH: "1"
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python paper.py --watch --minutes 320 --chain-after 318
+
+      - name: Persist journal
+        if: always()
+        env:
+          PAPER_GIT_PUSH: "1"
+        run: python -c "from ict.cloud import persist_journal; persist_journal('paper scan')"
 
       - uses: actions/upload-pages-artifact@v3
         if: always()
@@ -57,7 +62,7 @@ jobs:
         if: always() && !cancelled()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh workflow run paper.yml --ref main
+        run: python -c "from ict.cloud import dispatch_next; dispatch_next()"
 
   deploy:
     needs: scan
