@@ -44,6 +44,10 @@ def _get(path: str, params: dict[str, str]) -> dict:
 
 def fetch_candles(inst_id: str, bar: str, limit: int) -> list[Candle]:
     payload = _get("/market/candles", {"instId": inst_id, "bar": bar, "limit": str(limit)})
+    return _rows_to_candles(payload.get("data"))
+
+
+def _rows_to_candles(rows: list) -> list[Candle]:
     candles = [
         Candle(
             ts=int(row[0]),
@@ -53,10 +57,22 @@ def fetch_candles(inst_id: str, bar: str, limit: int) -> list[Candle]:
             close=float(row[4]),
             volume=float(row[5]),
         )
-        for row in payload.get("data") or []
+        for row in rows or []
     ]
     candles.sort(key=lambda c: c.ts)
     return candles
+
+
+def fetch_history_candles(inst_id: str, bar: str, limit: int = 100, after: int | None = None) -> list[Candle]:
+    """Older candles, for backtests. `after` is a ts in ms: rows strictly older.
+
+    /market/candles only reaches back a few hundred bars. This is the endpoint
+    that walks history, and like it, it is public — no API key, no account.
+    """
+    params = {"instId": inst_id, "bar": bar, "limit": str(limit)}
+    if after is not None:
+        params["after"] = str(int(after))
+    return _rows_to_candles(_get("/market/history-candles", params).get("data"))
 
 
 def bar_ms(bar: str) -> int:

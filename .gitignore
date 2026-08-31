@@ -7,3 +7,6 @@ __pycache__/
 # artifact. Committing it churned a fresh timestamp into git every 15 minutes
 # and made the journal push conflict for no reason.
 dashboard/desk.json
+
+# Historical candle caches: large, derived, re-fetchable.
+data/
