@@ -1,8 +1,12 @@
 name: paper-scan
 
+# GitHub's */10 cron skips hours on public repos. Entries need a closed 15m bar;
+# exits need ticks. Watch ~8 min, then this job dispatches itself (GITHUB_TOKEN
+# may fire workflow_dispatch). Hourly cron is only a dead-man restart.
+
 on:
   schedule:
-    - cron: "*/10 * * * *"
+    - cron: "17 * * * *"
   workflow_dispatch:
   push:
     branches: [main]
@@ -11,6 +15,7 @@ permissions:
   contents: write
   pages: write
   id-token: write
+  actions: write
 
 concurrency:
   group: paper-scan
@@ -19,6 +24,7 @@ concurrency:
 jobs:
   scan:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -29,10 +35,12 @@ jobs:
       - name: Install
         run: pip install -r requirements.txt
 
-      - name: Scan once
-        run: python paper.py
+      - name: Watch 15m closes and open SL/TP
+        continue-on-error: true
+        run: python paper.py --watch --minutes 8
 
       - name: Persist journal
+        if: always()
         run: |
           git config user.name "okx-ict-paper"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -41,8 +49,15 @@ jobs:
           git push
 
       - uses: actions/upload-pages-artifact@v3
+        if: always()
         with:
           path: dashboard
+
+      - name: Chain next watch
+        if: always() && !cancelled()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run paper.yml --ref main
 
   deploy:
     needs: scan

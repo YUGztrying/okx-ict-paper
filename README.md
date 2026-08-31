@@ -10,7 +10,7 @@ Needs the `okx` CLI (`@okx_ai/okx-trade-cli`) on PATH.
 
 ## Cloud (PC éteint)
 
-GitHub Actions scanne BTC/ETH toutes les 10 minutes et publie le blotter :
+GitHub Actions watches closed 15m candles (the ICT/Fabio bar) and checks open paper against the last price every few seconds. The public-repo 10-minute cron was skipping hours, so the job now restarts itself when it finishes.
 
 https://yugztrying.github.io/okx-ict-paper/
 
@@ -19,8 +19,10 @@ Toujours paper. Aucun ordre. Tu peux éteindre l’ordi.
 ## Local (optionnel)
 
 ```bash
-python paper.py              # one scan BTC + ETH
-python paper.py --loop 10    # every 10 minutes
+python paper.py --watch           # enter on 15m close, exit on SL/TP
+python paper.py --watch --minutes 8
+python paper.py              # one full scan BTC + ETH
+python paper.py --loop 10    # full scan every 10 minutes
 python paper.py --status     # journal stats
 python dashboard.py          # phone blotter on http://<LAN>:8787
 ```
