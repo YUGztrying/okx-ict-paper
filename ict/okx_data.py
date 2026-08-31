@@ -1,12 +1,21 @@
 from __future__ import annotations
 
 import json
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 
 OKX = "https://www.okx.com/api/v5"
+BAR_MS = {
+    "1m": 60_000,
+    "3m": 180_000,
+    "5m": 300_000,
+    "15m": 900_000,
+    "1H": 3_600_000,
+    "4H": 14_400_000,
+}
 
 
 @dataclass(frozen=True)
@@ -48,6 +57,30 @@ def fetch_candles(inst_id: str, bar: str, limit: int) -> list[Candle]:
     ]
     candles.sort(key=lambda c: c.ts)
     return candles
+
+
+def bar_ms(bar: str) -> int:
+    if bar not in BAR_MS:
+        raise ValueError(f"unsupported bar {bar}")
+    return BAR_MS[bar]
+
+
+def closed_candle(candles: list[Candle], bar: str, now_ms: int | None = None) -> Candle | None:
+    """Newest candle that has fully closed. OKX's latest row is often still forming."""
+    width = bar_ms(bar)
+    now = int(now_ms if now_ms is not None else time.time() * 1000)
+    for candle in reversed(candles):
+        if candle.ts + width <= now:
+            return candle
+    return None
+
+
+def seconds_until_bar_close(bar: str, now: float | None = None) -> float:
+    width = bar_ms(bar) / 1000.0
+    t = now if now is not None else time.time()
+    elapsed = t % width
+    remaining = width - elapsed
+    return remaining if remaining > 0 else width
 
 
 def fetch_last(inst_id: str) -> float:

@@ -42,6 +42,11 @@ class BlotterMarkup(unittest.TestCase):
         self.assertIn("data-live-pnl", HTML)
         self.assertIn("Notional", HTML)
 
+    def test_settings_describe_the_desk_loop(self) -> None:
+        self.assertIn("confirmed 15m close", HTML)
+        self.assertIn("First last-print through stop or target", HTML)
+        self.assertIn("pushes the journal", HTML)
+
 
 if __name__ == "__main__":
     unittest.main()
