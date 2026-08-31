@@ -1,13 +1,13 @@
 {
   "mode": "paper",
   "book": "ict",
-  "generated_at": "2026-08-31T17:25:23.421362+00:00",
-  "last_scan": "2026-08-31T17:25:23.420543+00:00",
+  "generated_at": "2026-08-31T17:53:28.088249+00:00",
+  "last_scan": "2026-08-31T17:53:28.087759+00:00",
   "stats": {
     "fills": 0,
     "wins": 0,
     "losses": 0,
-    "stand_downs": 38,
+    "stand_downs": 40,
     "win_rate": null,
     "avg_r": null,
     "open": {}
@@ -15,7 +15,7 @@
   "open": {},
   "latest": {
     "ETH-USDT": {
-      "logged_at": "2026-08-31T17:25:23.420543+00:00",
+      "logged_at": "2026-08-31T17:53:28.087759+00:00",
       "strategy": "ict",
       "type": "stand_down",
       "inst_id": "ETH-USDT",
@@ -25,7 +25,7 @@
         "pd_array",
         "risk"
       ],
-      "last": 2467.0,
+      "last": 2474.75,
       "bias": "long",
       "reasons": [
         "htf_bias: long | weekly HH/HL; daily close up 2026-08-31",
@@ -37,7 +37,7 @@
       ]
     },
     "BTC-USDT": {
-      "logged_at": "2026-08-31T17:25:22.963474+00:00",
+      "logged_at": "2026-08-31T17:53:27.472546+00:00",
       "strategy": "ict",
       "type": "stand_down",
       "inst_id": "BTC-USDT",
@@ -47,19 +47,63 @@
         "pd_array",
         "risk"
       ],
-      "last": 78545.5,
+      "last": 78886.8,
       "bias": "long",
       "reasons": [
         "htf_bias: long | weekly HH/HL; daily close up 2026-08-31",
-        "draw: equal highs 78832.2",
+        "draw: PDH 79401.4",
         "amd: accumulation | asia 77385.50-78324.70 swept=False",
         "session: dead score=2",
-        "pd_array: FVG 78080.60-78371.70 zone=wrong side of 50%",
-        "risk: R:R 0.66 (min 2.0)"
+        "pd_array: FVG 78744.80-78838.90 zone=wrong side of 50%",
+        "risk: R:R 0.41 (min 2.0)"
       ]
     }
   },
   "feed": [
+    {
+      "logged_at": "2026-08-31T17:53:28.087759+00:00",
+      "strategy": "ict",
+      "type": "stand_down",
+      "inst_id": "ETH-USDT",
+      "missing": [
+        "amd",
+        "session",
+        "pd_array",
+        "risk"
+      ],
+      "last": 2474.75,
+      "bias": "long",
+      "reasons": [
+        "htf_bias: long | weekly HH/HL; daily close up 2026-08-31",
+        "draw: equal highs 2533.33",
+        "amd: accumulation | asia 2401.52-2446.66 swept=False",
+        "session: dead score=2",
+        "pd_array: FVG 2448.89-2460.49 zone=wrong side of 50%",
+        "risk: R:R 1.42 (min 2.0)"
+      ]
+    },
+    {
+      "logged_at": "2026-08-31T17:53:27.472546+00:00",
+      "strategy": "ict",
+      "type": "stand_down",
+      "inst_id": "BTC-USDT",
+      "missing": [
+        "amd",
+        "session",
+        "pd_array",
+        "risk"
+      ],
+      "last": 78886.8,
+      "bias": "long",
+      "reasons": [
+        "htf_bias: long | weekly HH/HL; daily close up 2026-08-31",
+        "draw: PDH 79401.4",
+        "amd: accumulation | asia 77385.50-78324.70 swept=False",
+        "session: dead score=2",
+        "pd_array: FVG 78744.80-78838.90 zone=wrong side of 50%",
+        "risk: R:R 0.41 (min 2.0)"
+      ]
+    },
     {
       "logged_at": "2026-08-31T17:25:23.420543+00:00",
       "strategy": "ict",
@@ -857,61 +901,19 @@
         "pd_array: no FVG / not in discount-premium",
         "risk: incomplete levels"
       ]
-    },
-    {
-      "logged_at": "2026-08-30T23:13:59.753693+00:00",
-      "type": "stand_down",
-      "inst_id": "ETH-USDT",
-      "missing": [
-        "amd",
-        "session",
-        "pd_array",
-        "risk"
-      ],
-      "last": 2465.19,
-      "bias": "long",
-      "reasons": [
-        "htf_bias: long | weekly HH/HL; daily close up 2026-08-30",
-        "draw: PDH 2467.87",
-        "amd: accumulation | asia 2451.80-2467.87 swept=False",
-        "session: dead score=2",
-        "pd_array: no unfilled 15m FVG",
-        "risk: incomplete levels"
-      ]
-    },
-    {
-      "logged_at": "2026-08-30T23:13:57.280341+00:00",
-      "type": "stand_down",
-      "inst_id": "BTC-USDT",
-      "missing": [
-        "amd",
-        "session",
-        "pd_array",
-        "risk"
-      ],
-      "last": 78355.0,
-      "bias": "long",
-      "reasons": [
-        "htf_bias: long | weekly HH/HL; daily close up 2026-08-30",
-        "draw: equal highs 79515.7",
-        "amd: accumulation | asia 77994.70-78327.80 swept=False",
-        "session: dead score=2",
-        "pd_array: no unfilled 15m FVG",
-        "risk: incomplete levels"
-      ]
     }
   ],
   "books": {
     "ict": {
       "mode": "paper",
       "book": "ict",
-      "generated_at": "2026-08-31T17:25:23.421362+00:00",
-      "last_scan": "2026-08-31T17:25:23.420543+00:00",
+      "generated_at": "2026-08-31T17:53:28.088249+00:00",
+      "last_scan": "2026-08-31T17:53:28.087759+00:00",
       "stats": {
         "fills": 0,
         "wins": 0,
         "losses": 0,
-        "stand_downs": 38,
+        "stand_downs": 40,
         "win_rate": null,
         "avg_r": null,
         "open": {}
@@ -919,7 +921,7 @@
       "open": {},
       "latest": {
         "ETH-USDT": {
-          "logged_at": "2026-08-31T17:25:23.420543+00:00",
+          "logged_at": "2026-08-31T17:53:28.087759+00:00",
           "strategy": "ict",
           "type": "stand_down",
           "inst_id": "ETH-USDT",
@@ -929,7 +931,7 @@
             "pd_array",
             "risk"
           ],
-          "last": 2467.0,
+          "last": 2474.75,
           "bias": "long",
           "reasons": [
             "htf_bias: long | weekly HH/HL; daily close up 2026-08-31",
@@ -941,7 +943,7 @@
           ]
         },
         "BTC-USDT": {
-          "logged_at": "2026-08-31T17:25:22.963474+00:00",
+          "logged_at": "2026-08-31T17:53:27.472546+00:00",
           "strategy": "ict",
           "type": "stand_down",
           "inst_id": "BTC-USDT",
@@ -951,19 +953,63 @@
             "pd_array",
             "risk"
           ],
-          "last": 78545.5,
+          "last": 78886.8,
           "bias": "long",
           "reasons": [
             "htf_bias: long | weekly HH/HL; daily close up 2026-08-31",
-            "draw: equal highs 78832.2",
+            "draw: PDH 79401.4",
             "amd: accumulation | asia 77385.50-78324.70 swept=False",
             "session: dead score=2",
-            "pd_array: FVG 78080.60-78371.70 zone=wrong side of 50%",
-            "risk: R:R 0.66 (min 2.0)"
+            "pd_array: FVG 78744.80-78838.90 zone=wrong side of 50%",
+            "risk: R:R 0.41 (min 2.0)"
           ]
         }
       },
       "feed": [
+        {
+          "logged_at": "2026-08-31T17:53:28.087759+00:00",
+          "strategy": "ict",
+          "type": "stand_down",
+          "inst_id": "ETH-USDT",
+          "missing": [
+            "amd",
+            "session",
+            "pd_array",
+            "risk"
+          ],
+          "last": 2474.75,
+          "bias": "long",
+          "reasons": [
+            "htf_bias: long | weekly HH/HL; daily close up 2026-08-31",
+            "draw: equal highs 2533.33",
+            "amd: accumulation | asia 2401.52-2446.66 swept=False",
+            "session: dead score=2",
+            "pd_array: FVG 2448.89-2460.49 zone=wrong side of 50%",
+            "risk: R:R 1.42 (min 2.0)"
+          ]
+        },
+        {
+          "logged_at": "2026-08-31T17:53:27.472546+00:00",
+          "strategy": "ict",
+          "type": "stand_down",
+          "inst_id": "BTC-USDT",
+          "missing": [
+            "amd",
+            "session",
+            "pd_array",
+            "risk"
+          ],
+          "last": 78886.8,
+          "bias": "long",
+          "reasons": [
+            "htf_bias: long | weekly HH/HL; daily close up 2026-08-31",
+            "draw: PDH 79401.4",
+            "amd: accumulation | asia 77385.50-78324.70 swept=False",
+            "session: dead score=2",
+            "pd_array: FVG 78744.80-78838.90 zone=wrong side of 50%",
+            "risk: R:R 0.41 (min 2.0)"
+          ]
+        },
         {
           "logged_at": "2026-08-31T17:25:23.420543+00:00",
           "strategy": "ict",
@@ -1761,69 +1807,71 @@
             "pd_array: no FVG / not in discount-premium",
             "risk: incomplete levels"
           ]
-        },
-        {
-          "logged_at": "2026-08-30T23:13:59.753693+00:00",
-          "type": "stand_down",
-          "inst_id": "ETH-USDT",
-          "missing": [
-            "amd",
-            "session",
-            "pd_array",
-            "risk"
-          ],
-          "last": 2465.19,
-          "bias": "long",
-          "reasons": [
-            "htf_bias: long | weekly HH/HL; daily close up 2026-08-30",
-            "draw: PDH 2467.87",
-            "amd: accumulation | asia 2451.80-2467.87 swept=False",
-            "session: dead score=2",
-            "pd_array: no unfilled 15m FVG",
-            "risk: incomplete levels"
-          ]
-        },
-        {
-          "logged_at": "2026-08-30T23:13:57.280341+00:00",
-          "type": "stand_down",
-          "inst_id": "BTC-USDT",
-          "missing": [
-            "amd",
-            "session",
-            "pd_array",
-            "risk"
-          ],
-          "last": 78355.0,
-          "bias": "long",
-          "reasons": [
-            "htf_bias: long | weekly HH/HL; daily close up 2026-08-30",
-            "draw: equal highs 79515.7",
-            "amd: accumulation | asia 77994.70-78327.80 swept=False",
-            "session: dead score=2",
-            "pd_array: no unfilled 15m FVG",
-            "risk: incomplete levels"
-          ]
         }
       ]
     },
     "fabio": {
       "mode": "paper",
       "book": "fabio",
-      "generated_at": "2026-08-31T17:25:23.421785+00:00",
-      "last_scan": "2026-08-31T17:25:23.420979+00:00",
+      "generated_at": "2026-08-31T17:53:28.088488+00:00",
+      "last_scan": "2026-08-31T17:53:28.088018+00:00",
       "stats": {
-        "fills": 1,
+        "fills": 2,
         "wins": 1,
         "losses": 0,
-        "stand_downs": 9,
+        "stand_downs": 10,
         "win_rate": 1.0,
         "avg_r": 2.1446114712436266,
-        "open": {}
+        "open": {
+          "BTC-USDT": {
+            "bias": "short",
+            "entry": 78886.8,
+            "stop": 79158.0,
+            "target": 77729.1,
+            "rr": 4.268805309734549,
+            "risk_pct": 0.5,
+            "opened_at": "2026-08-31T17:53:27.472794+00:00",
+            "reasons": [
+              "session: ny 17h UTC",
+              "profile: 20 session bars (need 4)",
+              "value_area: VAL 77729.10 POC 78388.07 VAH 79000.00",
+              "aaa: AAA short · VAH fade / absorption wick",
+              "risk: R:R 4.27 (min 1.5)"
+            ],
+            "strategy": "fabio",
+            "risk_usd": 50.0,
+            "qty": 0.18436578171091644,
+            "notional": 14544.026548672724,
+            "stop_dist": 271.1999999999971
+          }
+        }
       },
-      "open": {},
+      "open": {
+        "BTC-USDT": {
+          "bias": "short",
+          "entry": 78886.8,
+          "stop": 79158.0,
+          "target": 77729.1,
+          "rr": 4.268805309734549,
+          "risk_pct": 0.5,
+          "opened_at": "2026-08-31T17:53:27.472794+00:00",
+          "reasons": [
+            "session: ny 17h UTC",
+            "profile: 20 session bars (need 4)",
+            "value_area: VAL 77729.10 POC 78388.07 VAH 79000.00",
+            "aaa: AAA short · VAH fade / absorption wick",
+            "risk: R:R 4.27 (min 1.5)"
+          ],
+          "strategy": "fabio",
+          "risk_usd": 50.0,
+          "qty": 0.18436578171091644,
+          "notional": 14544.026548672724,
+          "stop_dist": 271.1999999999971
+        }
+      },
       "latest": {
         "ETH-USDT": {
-          "logged_at": "2026-08-31T17:25:23.420979+00:00",
+          "logged_at": "2026-08-31T17:53:28.088018+00:00",
           "strategy": "fabio",
           "type": "stand_down",
           "inst_id": "ETH-USDT",
@@ -1831,37 +1879,93 @@
             "aaa",
             "risk"
           ],
-          "last": 2467.0,
+          "last": 2474.75,
           "bias": "unclear",
           "reasons": [
             "session: ny 17h UTC",
-            "profile: 18 session bars (need 4)",
+            "profile: 20 session bars (need 4)",
             "value_area: VAL 2437.21 POC 2461.49 VAH 2478.57",
             "aaa: not at value extreme with rejection",
             "risk: incomplete"
           ]
         },
         "BTC-USDT": {
-          "logged_at": "2026-08-31T17:25:22.963947+00:00",
+          "logged_at": "2026-08-31T17:53:27.472936+00:00",
+          "strategy": "fabio",
+          "type": "paper_fill",
+          "inst_id": "BTC-USDT",
+          "last": 78886.8,
+          "position": {
+            "bias": "short",
+            "entry": 78886.8,
+            "stop": 79158.0,
+            "target": 77729.1,
+            "rr": 4.268805309734549,
+            "risk_pct": 0.5,
+            "opened_at": "2026-08-31T17:53:27.472794+00:00",
+            "reasons": [
+              "session: ny 17h UTC",
+              "profile: 20 session bars (need 4)",
+              "value_area: VAL 77729.10 POC 78388.07 VAH 79000.00",
+              "aaa: AAA short · VAH fade / absorption wick",
+              "risk: R:R 4.27 (min 1.5)"
+            ],
+            "strategy": "fabio",
+            "risk_usd": 50.0,
+            "qty": 0.18436578171091644,
+            "notional": 14544.026548672724,
+            "stop_dist": 271.1999999999971
+          }
+        }
+      },
+      "feed": [
+        {
+          "logged_at": "2026-08-31T17:53:28.088018+00:00",
           "strategy": "fabio",
           "type": "stand_down",
-          "inst_id": "BTC-USDT",
+          "inst_id": "ETH-USDT",
           "missing": [
             "aaa",
             "risk"
           ],
-          "last": 78545.5,
+          "last": 2474.75,
           "bias": "unclear",
           "reasons": [
             "session: ny 17h UTC",
-            "profile: 18 session bars (need 4)",
-            "value_area: VAL 77729.10 POC 78388.07 VAH 78796.20",
+            "profile: 20 session bars (need 4)",
+            "value_area: VAL 2437.21 POC 2461.49 VAH 2478.57",
             "aaa: not at value extreme with rejection",
             "risk: incomplete"
           ]
-        }
-      },
-      "feed": [
+        },
+        {
+          "logged_at": "2026-08-31T17:53:27.472936+00:00",
+          "strategy": "fabio",
+          "type": "paper_fill",
+          "inst_id": "BTC-USDT",
+          "last": 78886.8,
+          "position": {
+            "bias": "short",
+            "entry": 78886.8,
+            "stop": 79158.0,
+            "target": 77729.1,
+            "rr": 4.268805309734549,
+            "risk_pct": 0.5,
+            "opened_at": "2026-08-31T17:53:27.472794+00:00",
+            "reasons": [
+              "session: ny 17h UTC",
+              "profile: 20 session bars (need 4)",
+              "value_area: VAL 77729.10 POC 78388.07 VAH 79000.00",
+              "aaa: AAA short · VAH fade / absorption wick",
+              "risk: R:R 4.27 (min 1.5)"
+            ],
+            "strategy": "fabio",
+            "risk_usd": 50.0,
+            "qty": 0.18436578171091644,
+            "notional": 14544.026548672724,
+            "stop_dist": 271.1999999999971
+          }
+        },
         {
           "logged_at": "2026-08-31T17:25:23.420979+00:00",
           "strategy": "fabio",
