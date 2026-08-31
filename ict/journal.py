@@ -11,33 +11,44 @@ RUNS = JOURNAL_DIR / "runs.jsonl"
 OPENS = JOURNAL_DIR / "open.json"
 
 
+def _paths(book: str) -> tuple[Path, Path]:
+    if book == "ict":
+        return JOURNAL_DIR / "runs.jsonl", JOURNAL_DIR / "open.json"
+    folder = JOURNAL_DIR / book
+    return folder / "runs.jsonl", folder / "open.json"
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def append(event: dict[str, Any]) -> None:
-    JOURNAL_DIR.mkdir(parents=True, exist_ok=True)
-    event = {"logged_at": _now(), **event}
-    with RUNS.open("a", encoding="utf-8") as fh:
+def append(event: dict[str, Any], book: str = "ict") -> None:
+    runs, _ = _paths(book)
+    runs.parent.mkdir(parents=True, exist_ok=True)
+    event = {"logged_at": _now(), "strategy": book, **event}
+    with runs.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(event, ensure_ascii=False) + "\n")
 
 
-def load_open() -> dict[str, Any]:
-    if not OPENS.exists():
+def load_open(book: str = "ict") -> dict[str, Any]:
+    _, opens = _paths(book)
+    if not opens.exists():
         return {}
-    return json.loads(OPENS.read_text(encoding="utf-8"))
+    return json.loads(opens.read_text(encoding="utf-8"))
 
 
-def save_open(state: dict[str, Any]) -> None:
-    JOURNAL_DIR.mkdir(parents=True, exist_ok=True)
-    OPENS.write_text(json.dumps(state, indent=2), encoding="utf-8")
+def save_open(state: dict[str, Any], book: str = "ict") -> None:
+    runs, opens = _paths(book)
+    opens.parent.mkdir(parents=True, exist_ok=True)
+    opens.write_text(json.dumps(state, indent=2), encoding="utf-8")
 
 
-def consecutive_losses(inst_id: str) -> int:
-    if not RUNS.exists():
+def consecutive_losses(inst_id: str, book: str = "ict") -> int:
+    runs, _ = _paths(book)
+    if not runs.exists():
         return 0
     streak = 0
-    lines = RUNS.read_text(encoding="utf-8").strip().splitlines()
+    lines = runs.read_text(encoding="utf-8").strip().splitlines()
     for line in reversed(lines):
         event = json.loads(line)
         if event.get("inst_id") != inst_id:
@@ -52,13 +63,14 @@ def consecutive_losses(inst_id: str) -> int:
     return streak
 
 
-def stats() -> dict[str, Any]:
-    if not RUNS.exists():
-        return {"fills": 0, "wins": 0, "losses": 0, "stand_downs": 0, "win_rate": None, "avg_r": None}
+def stats(book: str = "ict") -> dict[str, Any]:
+    runs, _ = _paths(book)
+    if not runs.exists():
+        return {"fills": 0, "wins": 0, "losses": 0, "stand_downs": 0, "win_rate": None, "avg_r": None, "open": {}}
     fills = wins = losses = stand = 0
     r_sum = 0.0
     r_n = 0
-    for line in RUNS.read_text(encoding="utf-8").splitlines():
+    for line in runs.read_text(encoding="utf-8").splitlines():
         event = json.loads(line)
         kind = event.get("type")
         if kind == "stand_down":
@@ -81,15 +93,16 @@ def stats() -> dict[str, Any]:
         "stand_downs": stand,
         "win_rate": (wins / closed) if closed else None,
         "avg_r": (r_sum / r_n) if r_n else None,
-        "open": load_open(),
+        "open": load_open(book),
     }
 
 
-def _parse_lines() -> list[dict[str, Any]]:
-    if not RUNS.exists():
+def _parse_lines(book: str = "ict") -> list[dict[str, Any]]:
+    runs, _ = _paths(book)
+    if not runs.exists():
         return []
     events: list[dict[str, Any]] = []
-    for line in RUNS.read_text(encoding="utf-8").splitlines():
+    for line in runs.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line:
             continue
@@ -100,8 +113,8 @@ def _parse_lines() -> list[dict[str, Any]]:
     return events
 
 
-def snapshot(limit: int = 40) -> dict[str, Any]:
-    events = _parse_lines()
+def snapshot(limit: int = 40, book: str = "ict") -> dict[str, Any]:
+    events = _parse_lines(book)
     latest: dict[str, Any] = {}
     for event in reversed(events):
         inst = event.get("inst_id")
@@ -113,10 +126,11 @@ def snapshot(limit: int = 40) -> dict[str, Any]:
     last_scan = events[-1]["logged_at"] if events else None
     return {
         "mode": "paper",
+        "book": book,
         "generated_at": _now(),
         "last_scan": last_scan,
-        "stats": stats(),
-        "open": load_open(),
+        "stats": stats(book),
+        "open": load_open(book),
         "latest": latest,
         "feed": feed,
     }
@@ -125,5 +139,11 @@ def snapshot(limit: int = 40) -> dict[str, Any]:
 def write_desk(path: Path | None = None) -> Path:
     dest = path or (ROOT / "dashboard" / "desk.json")
     dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_text(json.dumps(snapshot(), ensure_ascii=False, indent=2), encoding="utf-8")
+    ict = snapshot(book="ict")
+    fabio = snapshot(book="fabio")
+    payload = {
+        **ict,
+        "books": {"ict": ict, "fabio": fabio},
+    }
+    dest.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return dest
