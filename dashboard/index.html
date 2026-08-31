@@ -183,6 +183,26 @@
     }
     .hidden { display: none !important; }
     .empty { color: var(--mute); font-size: 14px; padding: 8px 0; }
+    .open-live .live-pnl { font-size: 28px; font-weight: 700; letter-spacing: -0.03em; }
+    .open-live .live-meta { font-size: 12px; color: var(--mute); margin: 2px 0 10px; }
+    .range {
+      position: relative; height: 8px; background: #111318; border-radius: 99px;
+      margin: 8px 0 12px; overflow: hidden;
+    }
+    .range b {
+      position: absolute; top: 0; bottom: 0; left: 0;
+      background: linear-gradient(90deg, var(--red), var(--blue));
+      opacity: .35;
+    }
+    .range i {
+      position: absolute; top: -2px; width: 3px; height: 12px;
+      background: #fff; border-radius: 2px; transform: translateX(-50%);
+    }
+    .tick-dot {
+      display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+      background: var(--mute); margin-right: 6px; vertical-align: middle;
+    }
+    .tick-dot.on { background: var(--green); box-shadow: 0 0 8px rgba(34,197,94,.7); }
     .lex details { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 0 14px; margin-bottom: 8px; }
     .lex summary { padding: 14px 0; font-weight: 600; cursor: pointer; }
     .lex dt { color: var(--blue); font-size: 12px; font-weight: 700; margin-top: 10px; }
@@ -208,6 +228,7 @@
 
   <section id="view-home">
     <div id="compare-board" class="hidden row2"></div>
+    <div id="opens"></div>
     <div id="home-ict">
     <div class="card">
       <div class="label">Total P&amp;L</div>
@@ -291,6 +312,8 @@
           <dt>Paper</dt><dd>Simulated. No money moves.</dd>
           <dt>Stand down / veto</dt><dd>At least one of the 6 filters failed. Normal.</dd>
           <dt>Fill / In paper</dt><dd>All 6 filters green. Fictional entry, stop, target.</dd>
+          <dt>Size / notional</dt><dd>Coins and USDT at work. Risk is 0.5% of $10,000 ($50). Qty = $50 ÷ |entry − stop|.</dd>
+          <dt>Live P&amp;L</dt><dd>Open mark from the public OKX ticker, updating in the page. Not a live order.</dd>
           <dt>Fabio AAA</dt><dd>Fade VAL/VAH after a rejection wick, target the other side of the session value area. Approximation without DOM/footprint.</dd>
           <dt>6/6</dt><dd>Every ICT filter must pass. 5/6 is a no. Why ICT has taken no trades.</dd>
         </dl>
@@ -345,12 +368,39 @@
     const START = 10000;
     const RISK = 50;
     let RAW = null, DATA = null, BOOK = "ict", filter = "all", query = "";
+    const TICK = {};
+    let tickSrc = "scan";
+    let tickWs = null, tickRest = null, tickPing = null, tickKey = "";
 
     const money = (n) => {
       const sign = n > 0 ? "+" : n < 0 ? "−" : "";
       return sign + "$" + Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     };
+    const usd = (n) => "$" + Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const px = (n) => Number(n).toLocaleString("en-US", { maximumFractionDigits: 2 });
     const pair = (id) => (id || "").replace("-USDT", "/USDT");
+    const qtyFmt = (inst, q) => {
+      const base = (inst || "").split("-")[0] || "COIN";
+      const d = base === "BTC" ? 5 : 4;
+      return q.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: d }) + " " + base;
+    };
+    const sizeOf = (pos) => {
+      const entry = Number(pos.entry), stop = Number(pos.stop);
+      if (pos.qty && pos.notional != null && pos.risk_usd != null) {
+        return { risk: Number(pos.risk_usd), qty: Number(pos.qty), notional: Number(pos.notional) };
+      }
+      const risk = START * (Number(pos.risk_pct != null ? pos.risk_pct : 0.5) / 100);
+      const dist = Math.abs(entry - stop);
+      const qty = dist ? risk / dist : 0;
+      return { risk, qty, notional: qty * entry };
+    };
+    const uPnl = (pos, last) => {
+      const { qty } = sizeOf(pos);
+      const entry = Number(pos.entry);
+      if (last == null || !entry || !qty) return 0;
+      return (pos.bias === "short" ? entry - last : last - entry) * qty;
+    };
+    const markOf = (inst, fallback) => (TICK[inst] != null ? TICK[inst] : fallback);
     const ago = (iso) => {
       if (!iso) return "";
       const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
@@ -427,20 +477,190 @@
           transform="rotate(-90 90 90)"/>`;
     }
 
+    function openInstIds() {
+      const ids = new Set();
+      ["ict", "fabio"].forEach((name) => {
+        Object.keys(deskOf(name).open || {}).forEach((id) => ids.add(id));
+      });
+      return [...ids];
+    }
+
+    function openCard(inst, pos, label, book) {
+      const sz = sizeOf(pos);
+      const last = markOf(inst, pos.entry);
+      const pnl = uPnl(pos, last);
+      const r = sz.risk ? pnl / sz.risk : 0;
+      const key = book + ":" + inst;
+      const stop = Number(pos.stop), target = Number(pos.target), entry = Number(pos.entry);
+      const span = target - stop;
+      const pct = span ? Math.max(0, Math.min(100, ((last - stop) / span) * 100)) : 50;
+      const cls = pnl > 0 ? "up" : pnl < 0 ? "down" : "";
+      return `<article class="card open-live" data-key="${key}" data-inst="${inst}" data-book="${book}">
+        <div class="top">
+          <div><div class="sym">${pair(inst)}</div><div class="kind">${label} · ${pos.bias || "—"} · paper</div></div>
+          <div class="live-pnl money ${cls}" data-live-pnl="${key}">${money(pnl)}</div>
+        </div>
+        <div class="live-meta" data-live-meta="${key}">${r >= 0 ? "+" : ""}${r.toFixed(2)} R · mark ${px(last)}</div>
+        <div class="range"><b></b><i data-live-range="${key}" style="left:${pct}%"></i></div>
+        <div class="grid">
+          <div><span>Size</span><div>${qtyFmt(inst, sz.qty)}</div></div>
+          <div><span>Notional</span><div>${usd(sz.notional)}</div></div>
+          <div><span>Risk</span><div>${usd(sz.risk)}</div></div>
+          <div><span>Entry</span><div>${px(entry)}</div></div>
+          <div><span>Stop</span><div>${px(stop)}</div></div>
+          <div><span>Target</span><div>${px(target)}</div></div>
+        </div>
+      </article>`;
+    }
+
+    function renderOpens() {
+      const el = document.getElementById("opens");
+      const books = BOOK === "compare"
+        ? [["ict", "ICT 2022"], ["fabio", "Fabio AAA"]]
+        : BOOK === "fabio" ? [["fabio", "Fabio AAA"]] : [["ict", "ICT 2022"]];
+      const rows = [];
+      books.forEach(([key, label]) => {
+        Object.entries(deskOf(key).open || {}).forEach(([inst, pos]) => rows.push(openCard(inst, pos, label, key)));
+      });
+      el.innerHTML = rows.length
+        ? `<div class="sec" style="margin-top:0"><h2>Open</h2><span class="chip"><span class="tick-dot" id="tick-dot"></span><span id="tick-src">Mark…</span></span></div>` + rows.join("")
+        : "";
+      syncTicks();
+      paintLive();
+    }
+
+    function paintLive() {
+      const src = document.getElementById("tick-src");
+      const dot = document.getElementById("tick-dot");
+      if (src) src.textContent = tickSrc === "live" ? "Live OKX" : tickSrc === "proxy" ? "Live (desk)" : "Last scan";
+      if (dot) dot.classList.toggle("on", tickSrc === "live" || tickSrc === "proxy");
+      document.querySelectorAll(".open-live").forEach((card) => {
+        const inst = card.dataset.inst;
+        const book = card.dataset.book;
+        const key = card.dataset.key;
+        const pos = (deskOf(book).open || {})[inst];
+        if (!pos) return;
+        const last = markOf(inst, Number(pos.entry));
+        const sz = sizeOf(pos);
+        const pnl = uPnl(pos, last);
+        const r = sz.risk ? pnl / sz.risk : 0;
+        const stop = Number(pos.stop), target = Number(pos.target);
+        const span = target - stop;
+        const pct = span ? Math.max(0, Math.min(100, ((last - stop) / span) * 100)) : 50;
+        const pnlEl = card.querySelector(`[data-live-pnl="${key}"]`);
+        const metaEl = card.querySelector(`[data-live-meta="${key}"]`);
+        const rng = card.querySelector(`[data-live-range="${key}"]`);
+        if (pnlEl) {
+          pnlEl.textContent = money(pnl);
+          pnlEl.className = "live-pnl money " + (pnl > 0 ? "up" : pnl < 0 ? "down" : "");
+        }
+        if (metaEl) metaEl.textContent = `${r >= 0 ? "+" : ""}${r.toFixed(2)} R · mark ${px(last)}`;
+        if (rng) rng.style.left = pct + "%";
+      });
+      document.querySelectorAll("[data-open-pnl]").forEach((el) => {
+        const inst = el.getAttribute("data-open-pnl");
+        const book = el.getAttribute("data-open-book");
+        const pos = (deskOf(book).open || {})[inst];
+        if (!pos) return;
+        const pnl = uPnl(pos, markOf(inst, Number(pos.entry)));
+        el.textContent = money(pnl);
+        el.className = "money " + (pnl > 0 ? "up" : pnl < 0 ? "down" : "");
+      });
+      document.querySelectorAll("[data-open-mark]").forEach((el) => {
+        const inst = el.getAttribute("data-open-mark");
+        if (TICK[inst] != null) el.textContent = px(TICK[inst]);
+      });
+    }
+
+    function stopTicks() {
+      if (tickWs) { try { tickWs.close(); } catch (_) {} tickWs = null; }
+      if (tickRest) { clearInterval(tickRest); tickRest = null; }
+      if (tickPing) { clearInterval(tickPing); tickPing = null; }
+      tickKey = "";
+    }
+
+    function applyTick(inst, last, src) {
+      if (last == null || Number.isNaN(Number(last))) return;
+      TICK[inst] = Number(last);
+      if (src === "live" || tickSrc !== "live") tickSrc = src;
+      paintLive();
+    }
+
+    async function pollRest(ids) {
+      try {
+        const res = await fetch("/api/tickers?instIds=" + encodeURIComponent(ids.join(",")), { cache: "no-store" });
+        if (res.ok) {
+          const body = await res.json();
+          (body.tickers || []).forEach((row) => { if (row.last != null) applyTick(row.instId, row.last, "proxy"); });
+          return true;
+        }
+      } catch (_) {}
+      try {
+        await Promise.all(ids.map(async (id) => {
+          const res = await fetch("https://www.okx.com/api/v5/market/ticker?instId=" + encodeURIComponent(id), { cache: "no-store" });
+          if (!res.ok) return;
+          const body = await res.json();
+          const last = body.data && body.data[0] && body.data[0].last;
+          if (last != null) applyTick(id, last, "live");
+        }));
+        return true;
+      } catch (_) {}
+      return false;
+    }
+
+    function connectWs(ids) {
+      try {
+        const ws = new WebSocket("wss://ws.okx.com:8443/ws/v5/public");
+        tickWs = ws;
+        ws.onopen = () => {
+          ws.send(JSON.stringify({ op: "subscribe", args: ids.map((instId) => ({ channel: "tickers", instId })) }));
+          tickPing = setInterval(() => { if (ws.readyState === 1) ws.send("ping"); }, 20000);
+        };
+        ws.onmessage = (ev) => {
+          if (ev.data === "pong") return;
+          let msg;
+          try { msg = JSON.parse(ev.data); } catch (_) { return; }
+          const row = msg.data && msg.data[0];
+          if (row && row.instId && row.last != null) applyTick(row.instId, row.last, "live");
+        };
+        ws.onerror = () => {};
+        ws.onclose = () => {
+          if (tickWs === ws) tickWs = null;
+          if (tickPing) { clearInterval(tickPing); tickPing = null; }
+        };
+      } catch (_) {}
+    }
+
+    function syncTicks() {
+      const ids = openInstIds();
+      if (!ids.length) { stopTicks(); tickSrc = "scan"; return; }
+      const key = ids.slice().sort().join(",");
+      if (key === tickKey && (tickWs || tickRest)) { paintLive(); return; }
+      stopTicks();
+      tickKey = key;
+      pollRest(ids);
+      tickRest = setInterval(() => pollRest(ids), 3000);
+      connectWs(ids);
+    }
     function recentItem(ev) {
       const pos = ev.position || {};
-      const r = ev.r != null ? Number(ev.r) * RISK : 0;
-      const up = ev.result === "win" || (ev.type === "paper_fill" && !ev.result);
-      const pnl = ev.type === "paper_close" ? `<div class="money ${r >= 0 ? "up" : "down"}">${money(r)}</div>` : `<div class="hint">${ago(ev.logged_at)}</div>`;
+      const sz = pos.entry ? sizeOf(pos) : null;
+      const r = ev.r != null ? Number(ev.r) * (sz ? sz.risk : RISK) : 0;
+      const openPos = ev.type === "paper_fill" && DATA.open && DATA.open[ev.inst_id];
+      let pnl;
+      if (ev.type === "paper_close") pnl = `<div class="money ${r >= 0 ? "up" : "down"}">${money(r)}</div>`;
+      else if (openPos) pnl = `<div class="money" data-open-pnl="${ev.inst_id}" data-open-book="${BOOK === "compare" ? "ict" : BOOK}">${money(uPnl(openPos, markOf(ev.inst_id, openPos.entry)))}</div>`;
+      else pnl = `<div class="hint">${ago(ev.logged_at)}</div>`;
+      const sizeLine = sz ? ` · ${usd(sz.notional)}` : "";
       return `<div class="card">
         <div class="trade">
           <div class="ico">${(ev.inst_id || "??").slice(0, 3)}</div>
           <div>
             <h3>${pair(ev.inst_id)}</h3>
-            <div class="sub">${(pos.bias || ev.bias || "—")} · paper · ${ago(ev.logged_at)}</div>
+            <div class="sub">${(pos.bias || ev.bias || "—")} · paper${sizeLine} · ${ago(ev.logged_at)}</div>
           </div>
           ${pnl}
-          <div class="prices"><span>Entry: ${pos.entry ? Number(pos.entry).toFixed(1) : "—"}</span><span>Exit: ${ev.last != null && ev.type === "paper_close" ? Number(ev.last).toFixed(1) : "—"}</span></div>
+          <div class="prices"><span>Entry: ${pos.entry ? px(pos.entry) : "—"}</span><span>Exit: ${ev.last != null && ev.type === "paper_close" ? px(ev.last) : "—"}</span></div>
         </div>
       </div>`;
     }
@@ -455,10 +675,23 @@
       const sideCls = side === "SELL" ? "sell" : side === "BUY" ? "buy" : "none";
       const miss = (ev.missing || []).map((m) => `<span>${m}</span>`).join("");
       const reasons = (ev.reasons || []).map((r) => `<div>${r}</div>`).join("");
+      const bookKey = ev.strategy || (BOOK === "fabio" ? "fabio" : "ict");
+      const livePos = isOpen ? (open[ev.inst_id] || pos) : pos;
+      const sz = livePos.entry ? sizeOf(livePos) : null;
       const actions = isOpen
         ? `<div class="actions"><button class="ghost" type="button" disabled>Modify</button><button class="danger" type="button" disabled>Cancel order</button></div>`
         : `<details class="more"><summary>View details</summary>${reasons || ev.error || "No extra notes."}</details>`;
       const bookLabel = ev.strategy === "fabio" ? "Fabio AAA" : "ICT paper";
+      const extra = ev.type === "stand_down"
+        ? `<div><span>Missing</span><div>${miss ? `<div class="miss">${miss}</div>` : "—"}</div></div>`
+        : (sz
+          ? `<div><span>Size</span><div>${qtyFmt(ev.inst_id, sz.qty)}</div></div>
+             <div><span>Notional</span><div>${usd(sz.notional)}</div></div>
+             <div><span>${isOpen ? "Live P&L" : "P&L"}</span><div class="money" ${isOpen ? `data-open-pnl="${ev.inst_id}" data-open-book="${bookKey}"` : ""}>${
+                 isOpen ? money(uPnl(livePos, markOf(ev.inst_id, livePos.entry))) : money(Number(ev.r || 0) * sz.risk)
+               }</div></div>
+             <div><span>R:R</span><div>${pos.rr != null ? Number(pos.rr).toFixed(2) : "—"}</div></div>`
+          : `<div><span>R:R</span><div>${pos.rr != null ? Number(pos.rr).toFixed(2) : "—"}</div></div>`);
       return `<article class="card hcard">
         <div class="top">
           <div><div class="sym">${pair(ev.inst_id)}</div><div class="kind">Crypto · ${bookLabel}</div></div>
@@ -466,9 +699,9 @@
         </div>
         <div class="grid">
           <div><span>Side</span><div class="side ${sideCls}">${side}</div></div>
-          <div><span>${isOpen ? "Limit" : "Price"}</span><div>${ev.last != null ? Number(ev.last).toLocaleString("en-US") : "—"}</div></div>
+          <div><span>${isOpen ? "Mark" : "Price"}</span><div ${isOpen ? `data-open-mark="${ev.inst_id}"` : ""}>${isOpen ? px(markOf(ev.inst_id, livePos.entry)) : (ev.last != null ? Number(ev.last).toLocaleString("en-US") : "—")}</div></div>
           <div><span>Time</span><div>${ago(ev.logged_at)}</div></div>
-          <div><span>${ev.type === "stand_down" ? "Missing" : "R:R"}</span><div>${miss ? `<div class="miss">${miss}</div>` : (pos.rr != null ? Number(pos.rr).toFixed(2) : "—")}</div></div>
+          ${extra}
         </div>
         ${actions}
       </article>`;
@@ -540,6 +773,7 @@
       document.getElementById("wr").textContent = a.wr == null ? "—" : (a.wr * 100).toFixed(1) + "%";
       document.getElementById("pf").textContent = a.pf == null ? "—" : (a.pf === Infinity ? "∞" : a.pf.toFixed(2));
       drawEquity(a.curve);
+      renderOpens();
 
       const recents = (DATA.feed || []).filter((e) => e.type === "paper_close" || e.type === "paper_fill").slice(0, 4);
       document.getElementById("recent").innerHTML = recents.length

@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from ict.sizing import attach_size
+
 ROOT = Path(__file__).resolve().parent.parent
 JOURNAL_DIR = ROOT / "journal"
 RUNS = JOURNAL_DIR / "runs.jsonl"
@@ -124,26 +126,27 @@ def snapshot(limit: int = 40, book: str = "ict") -> dict[str, Any]:
             break
     feed = list(reversed(events[-limit:]))
     last_scan = events[-1]["logged_at"] if events else None
+    opened = {inst: attach_size(dict(pos)) for inst, pos in load_open(book).items()}
     return {
         "mode": "paper",
         "book": book,
         "generated_at": _now(),
         "last_scan": last_scan,
         "stats": stats(book),
-        "open": load_open(book),
+        "open": opened,
         "latest": latest,
         "feed": feed,
     }
 
 
+def desk_payload() -> dict[str, Any]:
+    ict = snapshot(book="ict")
+    fabio = snapshot(book="fabio")
+    return {**ict, "books": {"ict": ict, "fabio": fabio}}
+
+
 def write_desk(path: Path | None = None) -> Path:
     dest = path or (ROOT / "dashboard" / "desk.json")
     dest.parent.mkdir(parents=True, exist_ok=True)
-    ict = snapshot(book="ict")
-    fabio = snapshot(book="fabio")
-    payload = {
-        **ict,
-        "books": {"ict": ict, "fabio": fabio},
-    }
-    dest.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    dest.write_text(json.dumps(desk_payload(), ensure_ascii=False, indent=2), encoding="utf-8")
     return dest
