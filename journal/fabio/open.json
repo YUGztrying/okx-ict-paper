@@ -1,0 +1,19 @@
+{
+  "ETH-USDT": {
+    "bias": "long",
+    "entry": 2440.78,
+    "stop": 2432.33558,
+    "target": 2458.89,
+    "rr": 2.1446114712436266,
+    "risk_pct": 0.5,
+    "opened_at": "2026-08-31T14:17:32.189917+00:00",
+    "reasons": [
+      "session: ny 14h UTC",
+      "profile: 6 session bars (need 4)",
+      "value_area: VAL 2437.21 POC 2442.39 VAH 2458.89",
+      "aaa: AAA long \u00b7 VAL fade / absorption wick",
+      "risk: R:R 2.14 (min 1.5)"
+    ],
+    "strategy": "fabio"
+  }
+}
