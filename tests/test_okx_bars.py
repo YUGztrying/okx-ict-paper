@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from ict.okx_data import Candle, closed_candle, seconds_until_bar_close
+from ict.okx_data import Candle, closed_candle, near_bar_boundary, seconds_until_bar_close
 
 
 def _c(ts: int) -> Candle:
@@ -28,6 +28,11 @@ class ClosedBar(unittest.TestCase):
         # 15:07:00 UTC on a unix-aligned clock: 8 minutes left
         now = 15 * 3600 + 7 * 60
         self.assertAlmostEqual(seconds_until_bar_close("15m", now=now), 8 * 60)
+
+    def test_near_bar_boundary_covers_close_and_open(self) -> None:
+        self.assertTrue(near_bar_boundary("15m", now=15 * 3600 - 3, window=12))
+        self.assertTrue(near_bar_boundary("15m", now=15 * 3600 + 3, window=12))
+        self.assertFalse(near_bar_boundary("15m", now=15 * 3600 + 7 * 60, window=12))
 
 
 if __name__ == "__main__":

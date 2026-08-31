@@ -8,11 +8,11 @@ How the desk sits the tape: [docs/trader-loop.md](docs/trader-loop.md).
 
 ## Run
 
-Market data is OKX **public REST + public WebSocket**. No CLI required for paper.
+Market data is OKX **public REST + public (tickers) and business (candles) WebSocket**. No CLI required for paper.
 
 ## Cloud (PC éteint)
 
-GitHub Actions holds the OKX public socket for ~5h20, **pushes the journal, then** starts the next job. Entries fire on a **confirmed 15m close** (`confirm=1`). Open paper is marked on every ticker print. Journal is pushed on fill, close, 15m scans, and before each handoff.
+GitHub Actions holds the OKX sockets for ~5h20, **pushes the journal, then** starts the next job. Entries fire on a **confirmed 15m close** (`confirm=1` on the business WS). Open paper is marked on every public ticker print. Journal is pushed on fill, close, 15m scans, and before each handoff.
 
 https://yugztrying.github.io/okx-ict-paper/
 

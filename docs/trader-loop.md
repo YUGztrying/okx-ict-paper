@@ -6,7 +6,9 @@ The desk copies how a human ICT / Fabio trader sits the session. It never sends 
 
 A real trader does not fade a 15m candle that is still printing. The model is built on a **closed** 15m bar (FVG, displacement, session value area).
 
-OKX’s public socket pushes `candle15m` with `confirm=0` while the bar forms and `confirm=1` when it closes. The bot enters the decision **only on confirm=1**. Then it loads HTF history over REST (weekly/daily/1H context) and runs ICT 6/6 and Fabio AAA. 5/6 is a veto. Same as a trader who waits for the close, then either takes it or stands down.
+OKX’s **business** socket (`wss://ws.okx.com:8443/ws/v5/business`) pushes `candle15m` with `confirm=0` while the bar forms and `confirm=1` when it closes. Candles are not on `/public` — that subscribe returns 60018. The bot enters the decision **only on confirm=1**. Then it loads HTF history over REST (weekly/daily/1H context) and runs ICT 6/6 and Fabio AAA. 5/6 is a veto. Same as a trader who waits for the close, then either takes it or stands down.
+
+If confirm=1 is late or dropped, REST closed-candle is checked in the seconds around the bar boundary. That is a stall guard, not a 10-minute poll.
 
 Fill price is the last print (WS) or the closed bar’s close, not a fantasy mid.
 
@@ -22,7 +24,7 @@ If the socket goes quiet for 8s while a position is open, REST last is used unti
 
 GitHub’s `*/10` cron on a public repo skipped hours. `GITHUB_TOKEN` also does not retrigger `on: push`, so a “paper scan” commit cannot keep the loop alive.
 
-The job now **holds the public WS for ~5h20** (GitHub’s cap is 6h). Before starting the next runner it **pushes the journal**, then dispatches. That order matters: the new job must checkout the latest fills and closes. A 6-hour cron is only a dead-man if the chain dies. `dispatch_next()` refuses to start a second chain when one is already queued or running.
+The job now **holds the sockets for ~5h20** (GitHub’s cap is 6h). Before starting the next runner it **pushes the journal**, then dispatches. That order matters: the new job must checkout the latest fills and closes. A 6-hour cron is only a dead-man if the chain dies. `dispatch_next()` refuses to start a second chain when one is already queued or running.
 
 Handoff is ~1–2 minutes while the next runner checks out and connects. The new job’s first act is a REST mark-to-market, so a level that is still through SL/TP is closed. A wick that tagged TP and fully retraced **only** during that handoff could be missed. That is the remaining GitHub limit, not a poll interval.
 
