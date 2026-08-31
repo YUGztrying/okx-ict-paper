@@ -1,0 +1,1 @@
+"""Fabio AAA paper model."""

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""ICT paper desk. Never places OKX orders."""
+"""Paper desk. ICT + Fabio AAA. Never places OKX orders."""
 
 from __future__ import annotations
 
@@ -10,8 +10,9 @@ import tomllib
 from datetime import datetime, timezone
 from pathlib import Path
 
+from fabio.model import analyze as analyze_fabio
 from ict.journal import append, consecutive_losses, load_open, save_open, stats, write_desk
-from ict.model import Fiche, analyze
+from ict.model import Fiche, analyze as analyze_ict
 from ict.okx_data import fetch_candles, fetch_last
 
 ROOT = Path(__file__).resolve().parent
@@ -22,8 +23,8 @@ def load_config() -> dict:
         return tomllib.load(fh)
 
 
-def update_open(cfg: dict) -> None:
-    open_state = load_open()
+def update_open(cfg: dict, book: str) -> None:
+    open_state = load_open(book)
     changed = False
     for inst_id, pos in list(open_state.items()):
         last = fetch_last(inst_id)
@@ -54,32 +55,19 @@ def update_open(cfg: dict) -> None:
                 "last": last,
                 "r": r,
                 "position": pos,
-            }
+            },
+            book=book,
         )
         del open_state[inst_id]
         changed = True
-        print(f"CLOSED {inst_id} {hit} @ {last}  R={r:.2f}")
+        print(f"[{book}] CLOSED {inst_id} {hit} @ {last}  R={r:.2f}")
     if changed:
-        save_open(open_state)
+        save_open(open_state, book)
 
 
-def run_one(inst_id: str, cfg: dict) -> Fiche:
-    hourly = fetch_candles(inst_id, cfg["htf_bar"], int(cfg["htf_limit"]))
-    entry = fetch_candles(inst_id, cfg["entry_bar"], int(cfg["entry_limit"]))
-    last = fetch_last(inst_id)
-    fiche = analyze(
-        inst_id,
-        last,
-        hourly,
-        entry,
-        min_rr=float(cfg["min_rr"]),
-        session_min=int(cfg["session_min_score"]),
-    )
-    return fiche
-
-
-def maybe_fill(fiche: Fiche, cfg: dict) -> None:
-    open_state = load_open()
+def maybe_fill(fiche: Fiche, cfg: dict, book: str) -> None:
+    open_state = load_open(book)
+    tag = f"[{book}] {fiche.inst_id}"
     if fiche.inst_id in open_state:
         append(
             {
@@ -88,12 +76,13 @@ def maybe_fill(fiche: Fiche, cfg: dict) -> None:
                 "missing": ["already_open"],
                 "last": fiche.last,
                 "reasons": fiche.reasons,
-            }
+            },
+            book=book,
         )
-        print(f"{fiche.inst_id}: stand down — already in a paper position")
+        print(f"{tag}: stand down — already in a paper position")
         return
 
-    losses = consecutive_losses(fiche.inst_id)
+    losses = consecutive_losses(fiche.inst_id, book)
     if losses >= int(cfg["max_consecutive_losses"]):
         append(
             {
@@ -102,9 +91,10 @@ def maybe_fill(fiche: Fiche, cfg: dict) -> None:
                 "missing": ["loss_streak"],
                 "last": fiche.last,
                 "reasons": fiche.reasons + [f"streak={losses}"],
-            }
+            },
+            book=book,
         )
-        print(f"{fiche.inst_id}: stand down — {losses} losses in a row")
+        print(f"{tag}: stand down — {losses} losses in a row")
         return
 
     if not fiche.passed:
@@ -116,12 +106,12 @@ def maybe_fill(fiche: Fiche, cfg: dict) -> None:
                 "last": fiche.last,
                 "bias": fiche.bias,
                 "reasons": fiche.reasons,
-            }
+            },
+            book=book,
         )
-        print(f"{fiche.inst_id}: STAND DOWN  last={fiche.last}  missing={', '.join(fiche.missing)}")
+        print(f"{tag}: STAND DOWN  last={fiche.last}  missing={', '.join(fiche.missing)}")
         for c in fiche.checks:
-            mark = "OK" if c.ok else "NO"
-            print(f"  [{mark}] {c.name}: {c.detail}")
+            print(f"  [{ 'OK' if c.ok else 'NO' }] {c.name}: {c.detail}")
         return
 
     pos = {
@@ -133,32 +123,24 @@ def maybe_fill(fiche: Fiche, cfg: dict) -> None:
         "risk_pct": cfg["risk_pct"],
         "opened_at": datetime.now(timezone.utc).isoformat(),
         "reasons": fiche.reasons,
+        "strategy": book,
     }
     open_state[fiche.inst_id] = pos
-    save_open(open_state)
-    append({"type": "paper_fill", "inst_id": fiche.inst_id, "last": fiche.last, "position": pos})
-    print(f"{fiche.inst_id}: PAPER FILL  {fiche.bias} @ {fiche.entry}")
+    save_open(open_state, book)
+    append({"type": "paper_fill", "inst_id": fiche.inst_id, "last": fiche.last, "position": pos}, book=book)
+    print(f"{tag}: PAPER FILL  {fiche.bias} @ {fiche.entry}")
     print(f"  stop {fiche.stop}  target {fiche.target}  R:R {fiche.rr:.2f}")
-    for c in fiche.checks:
-        print(f"  [OK] {c.name}: {c.detail}")
 
 
 def print_status() -> None:
-    s = stats()
-    wr = f"{s['win_rate']*100:.1f}%" if s["win_rate"] is not None else "n/a"
-    avg = f"{s['avg_r']:.2f}" if s["avg_r"] is not None else "n/a"
-    print(f"fills={s['fills']}  wins={s['wins']}  losses={s['losses']}  stand_downs={s['stand_downs']}")
-    print(f"win_rate={wr}  avg_R={avg}")
-    if s["open"]:
-        print("open:")
-        for inst, pos in s["open"].items():
-            print(f"  {inst} {pos['bias']} entry={pos['entry']} stop={pos['stop']} tp={pos['target']}")
-    else:
-        print("open: none")
+    for book in ("ict", "fabio"):
+        s = stats(book)
+        wr = f"{s['win_rate']*100:.1f}%" if s["win_rate"] is not None else "n/a"
+        print(f"{book}: fills={s['fills']} vetos={s['stand_downs']} wr={wr} open={list(s['open'])}")
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="ICT paper desk — no live orders")
+    parser = argparse.ArgumentParser(description="Paper desk — ICT + Fabio AAA, no live orders")
     parser.add_argument("--loop", type=int, metavar="MIN", help="repeat every N minutes")
     parser.add_argument("--status", action="store_true")
     args = parser.parse_args()
@@ -170,14 +152,41 @@ def main() -> int:
 
     def tick() -> None:
         print(f"\n=== {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')} ===")
-        update_open(cfg)
+        for book in ("ict", "fabio"):
+            update_open(cfg, book)
         for inst in cfg["instruments"]:
+            hourly = None
+            entry = None
+            last = None
             try:
-                fiche = run_one(inst, cfg)
-                maybe_fill(fiche, cfg)
+                hourly = fetch_candles(inst, cfg["htf_bar"], int(cfg["htf_limit"]))
+                entry = fetch_candles(inst, cfg["entry_bar"], int(cfg["entry_limit"]))
+                last = fetch_last(inst)
             except Exception as exc:
                 print(f"{inst}: error {exc}", file=sys.stderr)
-                append({"type": "error", "inst_id": inst, "error": str(exc)})
+                append({"type": "error", "inst_id": inst, "error": str(exc)}, book="ict")
+                continue
+            try:
+                maybe_fill(
+                    analyze_ict(
+                        inst,
+                        last,
+                        hourly,
+                        entry,
+                        min_rr=float(cfg["min_rr"]),
+                        session_min=int(cfg["session_min_score"]),
+                    ),
+                    cfg,
+                    "ict",
+                )
+            except Exception as exc:
+                append({"type": "error", "inst_id": inst, "error": str(exc)}, book="ict")
+                print(f"[ict] {inst}: error {exc}", file=sys.stderr)
+            try:
+                maybe_fill(analyze_fabio(inst, last, entry, min_rr=1.5), cfg, "fabio")
+            except Exception as exc:
+                append({"type": "error", "inst_id": inst, "error": str(exc)}, book="fabio")
+                print(f"[fabio] {inst}: error {exc}", file=sys.stderr)
         write_desk()
 
     tick()
