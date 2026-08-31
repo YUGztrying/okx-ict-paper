@@ -12,10 +12,10 @@ on:
   push:
     branches: [main]
 
+# Pages moved to publish-dashboard.yml; this job only writes the journal
+# and dispatches (the chain, and the blotter redraw).
 permissions:
   contents: write
-  pages: write
-  id-token: write
   actions: write
 
 concurrency:
@@ -53,16 +53,14 @@ jobs:
           PAPER_GIT_PUSH: "1"
         run: python -c "from ict.cloud import persist_journal; persist_journal('paper scan')"
 
-      # desk.json is derived and untracked, so the artifact needs it rebuilt
-      # from the journal this run just pushed.
-      - name: Rebuild dashboard payload
+      # publish-dashboard.yml owns Pages: it redraws the blotter every scan
+      # instead of only when this 5h20 job ends. Two workflows deploying Pages
+      # would just race each other, so this one no longer does.
+      - name: Publish dashboard
         if: always()
-        run: python -c "from ict.journal import write_desk; print(write_desk())"
-
-      - uses: actions/upload-pages-artifact@v3
-        if: always()
-        with:
-          path: dashboard
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python -c "from ict.cloud import publish_dashboard; publish_dashboard()"
 
       - name: Chain next watch
         if: always() && !cancelled()
@@ -70,12 +68,3 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python -c "from ict.cloud import dispatch_next; dispatch_next()"
 
-  deploy:
-    needs: scan
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
-    steps:
-      - id: deploy
-        uses: actions/deploy-pages@v4

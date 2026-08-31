@@ -81,6 +81,38 @@ def persist_journal(reason: str = "paper scan", attempts: int = 3) -> bool:
         return False
 
 
+def publish_dashboard(ref: str | None = None) -> bool:
+    """Redraw the Pages blotter now, instead of when this 5h20 job ends.
+
+    The journal is pushed every scan, but paper.yml only reaches its Pages
+    steps at the end of the watch. Between those, the phone shows a position
+    that may have closed hours ago — and the page live-marks it against OKX,
+    so a stale row looks like a live one. A GITHUB_TOKEN push does not
+    retrigger `on: push`, so dispatch is the mechanism that works here.
+
+    Best effort: a failed redraw must never disturb the desk.
+    """
+    if ref is None:
+        ref = os.environ.get("GITHUB_REF_NAME") or "main"
+    if not os.environ.get("GH_TOKEN") and not os.environ.get("GITHUB_TOKEN"):
+        return False
+    try:
+        proc = subprocess.run(
+            ["gh", "workflow", "run", "publish-dashboard.yml", "--ref", ref],
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError as exc:  # no gh on this box — a redraw is not worth a crash
+        print(f"dashboard redraw unavailable: {exc}", file=sys.stderr)
+        return False
+    if proc.returncode != 0:
+        print(f"dashboard redraw dispatch failed: {(proc.stderr or '').strip()[:200]}", file=sys.stderr)
+        return False
+    return True
+
+
 def should_dispatch_next(in_progress: int, queued: int) -> bool:
     """This run counts as one in_progress. Don't fork a second chain."""
     return queued == 0 and in_progress <= 1
