@@ -32,6 +32,8 @@ The runner checks out once and then watches for hours, so origin can move under 
 
 Handoff is ~1–2 minutes while the next runner checks out and connects. The new job’s first act is a REST mark-to-market, so a level that is still through SL/TP is closed. A wick that tagged TP and fully retraced **only** during that handoff could be missed. That is the remaining GitHub limit, not a poll interval.
 
+The blotter is its own workflow (`publish-dashboard.yml`). Pages only rebuilds when a job ends, and a job here is a 5h20 watch — so the phone would show a position that closed hours ago, live-marked against OKX, which reads as current. The desk dispatches a redraw after every scan and every close instead. That workflow only reads and publishes; it never commits, so it cannot race the desk's journal push.
+
 Local forever: `python paper.py --watch` (no minutes cap). Same WS loop, no chain.
 
 ## What this is not

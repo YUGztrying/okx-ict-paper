@@ -13,7 +13,7 @@ from pathlib import Path
 from fabio.model import analyze as analyze_fabio
 from ict.journal import append, consecutive_losses, load_open, save_open, stats, write_desk
 from ict.model import Fiche, analyze as analyze_ict
-from ict.cloud import dispatch_next, persist_enabled, persist_journal
+from ict.cloud import dispatch_next, persist_enabled, persist_journal, publish_dashboard
 from ict.exits import exit_result, realized_r
 from ict.okx_data import closed_bars, closed_candle, fetch_candles, fetch_last, near_bar_boundary
 from ict.okx_ws import PublicFeed, drain_events, is_decision_bar
@@ -58,6 +58,7 @@ def update_open(cfg: dict, book: str, marks: dict[str, float] | None = None) -> 
         save_open(open_state, book)
         write_desk()
         persist_journal(f"paper {book} close")
+        publish_dashboard()
     return changed
 
 
@@ -236,6 +237,9 @@ def tick(cfg: dict, marks: dict[str, float] | None = None, seen_close: dict[str,
         return False
     write_desk()
     persist_journal("paper scan")
+    # Redraw the phone blotter now. Pages would otherwise only rebuild when
+    # this 5h20 job ends, showing positions that closed hours ago as live.
+    publish_dashboard()
     return True
 
 

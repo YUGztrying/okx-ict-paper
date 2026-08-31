@@ -71,6 +71,7 @@ class ScanOncePerBar(unittest.TestCase):
             ("fetch_last", lambda inst: 1.0),
             ("write_desk", lambda *a, **k: None),
             ("persist_journal", lambda reason="paper scan": self.commits.append(reason) or True),
+            ("publish_dashboard", lambda *a, **k: True),
             ("analyze_ict", _veto),
             ("analyze_fabio", _veto),
         ):
@@ -141,6 +142,7 @@ class ClosedBarsOnly(unittest.TestCase):
              patch.object(paper, "fetch_last", lambda inst: 1.0), \
              patch.object(paper, "write_desk", lambda *a, **k: None), \
              patch.object(paper, "persist_journal", lambda reason="paper scan": True), \
+             patch.object(paper, "publish_dashboard", lambda *a, **k: True), \
              patch.object(paper, "analyze_fabio", _veto), \
              patch.object(paper, "analyze_ict", capture):
             paper.tick(CFG)
