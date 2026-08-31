@@ -1,10 +1,23 @@
 from __future__ import annotations
 
 import json
+import queue
 import unittest
 
 from ict.exits import exit_result, realized_r
-from ict.okx_ws import BarClose, Tick, is_decision_bar, parse_message, subscribe_payload
+from ict.okx_ws import (
+    BUSINESS_URL,
+    PUBLIC_URL,
+    BarClose,
+    Tick,
+    candle_subscribe,
+    drain_events,
+    is_decision_bar,
+    parse_message,
+    subscribe_error,
+    subscribe_payload,
+    ticker_subscribe,
+)
 from ict.cloud import persist_enabled, persist_journal, should_dispatch_next
 
 
@@ -55,11 +68,40 @@ class WsParse(unittest.TestCase):
         self.assertEqual(parse_message("ping"), [])
         self.assertEqual(parse_message(json.dumps({"event": "subscribe", "arg": {"channel": "tickers"}})), [])
 
+    def test_subscribe_error_is_surfaced(self) -> None:
+        raw = json.dumps({
+            "event": "error",
+            "code": "60018",
+            "msg": "Subscribe failed, wrong URL or channel:candle15m",
+        })
+        self.assertIn("candle15m", subscribe_error(raw) or "")
+        self.assertEqual(parse_message(raw), [])
+
+    def test_candles_are_not_on_the_public_url(self) -> None:
+        self.assertTrue(PUBLIC_URL.endswith("/ws/v5/public"))
+        self.assertTrue(BUSINESS_URL.endswith("/ws/v5/business"))
+        tickers = {a["channel"] for a in ticker_subscribe(["ETH-USDT"])["args"]}
+        candles = {a["channel"] for a in candle_subscribe(["ETH-USDT"], "15m")["args"]}
+        self.assertEqual(tickers, {"tickers"})
+        self.assertEqual(candles, {"candle15m"})
+        self.assertNotIn("candle15m", tickers)
+
     def test_subscribe_covers_tickers_and_15m(self) -> None:
         payload = subscribe_payload(["BTC-USDT", "ETH-USDT"], "15m")
         channels = {(a["channel"], a["instId"]) for a in payload["args"]}
         self.assertIn(("tickers", "ETH-USDT"), channels)
         self.assertIn(("candle15m", "BTC-USDT"), channels)
+
+    def test_drain_keeps_latest_tick_and_every_close(self) -> None:
+        q: queue.Queue[Tick | BarClose] = queue.Queue()
+        q.put(Tick("ETH-USDT", 1.0))
+        q.put(Tick("ETH-USDT", 2.0))
+        q.put(BarClose("ETH-USDT", 100, 2.0))
+        q.put(Tick("BTC-USDT", 9.0))
+        ticks, closes = drain_events(q, timeout=0.01)
+        self.assertEqual(ticks["ETH-USDT"].last, 2.0)
+        self.assertEqual(ticks["BTC-USDT"].last, 9.0)
+        self.assertEqual(closes, [BarClose("ETH-USDT", 100, 2.0)])
 
     def test_seed_bar_is_not_a_decision(self) -> None:
         seen: dict[str, int] = {}

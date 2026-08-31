@@ -1,6 +1,6 @@
 name: paper-scan
 
-# One writer. Public WS last for SL/TP; candle confirm=1 for entries.
+# One writer. Public WS last for SL/TP; business WS candle confirm=1 for entries.
 # ~5h20 watch (GitHub max 6h). Python persists the journal THEN chains.
 # YAML persist + dispatch is the safety net if the process dies first.
 # 6h cron is only a dead-man. GITHUB_TOKEN may fire workflow_dispatch.

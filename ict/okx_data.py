@@ -83,6 +83,13 @@ def seconds_until_bar_close(bar: str, now: float | None = None) -> float:
     return remaining if remaining > 0 else width
 
 
+def near_bar_boundary(bar: str, now: float | None = None, window: float = 12.0) -> bool:
+    """True in the last `window` seconds of a bar, or the first `window` of the next."""
+    width = bar_ms(bar) / 1000.0
+    left = seconds_until_bar_close(bar, now)
+    return left <= window or left >= width - window
+
+
 def fetch_last(inst_id: str) -> float:
     payload = _get("/market/ticker", {"instId": inst_id})
     rows = payload.get("data") or []

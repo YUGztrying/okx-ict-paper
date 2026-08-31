@@ -9,15 +9,14 @@ import time
 import tomllib
 from datetime import datetime, timezone
 from pathlib import Path
-from queue import Empty
 
 from fabio.model import analyze as analyze_fabio
 from ict.journal import append, consecutive_losses, load_open, save_open, stats, write_desk
 from ict.model import Fiche, analyze as analyze_ict
 from ict.cloud import dispatch_next, persist_enabled, persist_journal
 from ict.exits import exit_result, realized_r
-from ict.okx_data import closed_candle, fetch_candles, fetch_last
-from ict.okx_ws import BarClose, PublicFeed, Tick, is_decision_bar
+from ict.okx_data import closed_candle, fetch_candles, fetch_last, near_bar_boundary
+from ict.okx_ws import PublicFeed, drain_events, is_decision_bar
 from ict.sizing import position_size
 
 ROOT = Path(__file__).resolve().parent
@@ -232,7 +231,7 @@ def watch(cfg: dict, minutes: float, chain_after: float = 0) -> None:
     marks: dict[str, float] = {}
     chained = False
     last_watchdog = 0.0
-    last_desk = 0.0
+    last_bar_rest = 0.0
     last_handoff = 0.0
     bar = cfg["entry_bar"]
     feed = PublicFeed(list(cfg["instruments"]), bar)
@@ -242,30 +241,36 @@ def watch(cfg: dict, minutes: float, chain_after: float = 0) -> None:
     tick(cfg)
     seen_close = seed_seen_closes(list(cfg["instruments"]), bar)
     persist_journal("paper watch start")
-    print(f"watch WS tickers + {bar} confirm=1 — no live orders")
+    print(f"watch WS tickers + business {bar} confirm=1 — no live orders")
     try:
         while deadline is None or time.time() < deadline:
-            try:
-                ev = feed.events.get(timeout=1.0)
-            except Empty:
-                ev = None
-            if isinstance(ev, Tick):
-                marks[ev.inst_id] = ev.last
-                mark_all(cfg, marks)
-            elif isinstance(ev, BarClose):
+            ticks, closes = drain_events(feed.events, timeout=1.0)
+            for ev in closes:
                 if is_decision_bar(ev.inst_id, ev.ts, seen_close):
                     print(f"{ev.inst_id}: {bar} closed @ {ev.close}")
                     marks[ev.inst_id] = ev.close
                     tick(cfg, marks)
+            if ticks:
+                for inst, ev in ticks.items():
+                    marks[inst] = ev.last
+                mark_all(cfg, marks)
             now = time.time()
             if any_open() and feed.stale(8.0) and now - last_watchdog >= 2.0:
                 last_watchdog = now
                 marks.update(rest_marks(cfg))
                 mark_all(cfg, marks)
-            if any_open() and now - last_desk >= 120:
-                write_desk()
-                persist_journal("paper desk")
-                last_desk = now
+            if near_bar_boundary(bar) and now - last_bar_rest >= 2.0:
+                last_bar_rest = now
+                for inst in cfg["instruments"]:
+                    try:
+                        closed = closed_candle(fetch_candles(inst, bar, 3), bar)
+                    except Exception as exc:
+                        print(f"{inst}: bar-rest error {exc}", file=sys.stderr)
+                        continue
+                    if closed and is_decision_bar(inst, closed.ts, seen_close):
+                        print(f"{inst}: {bar} closed @ {closed.close} (REST)")
+                        marks[inst] = closed.close
+                        tick(cfg, marks)
             if chain_at and not chained and now >= chain_at and now - last_handoff >= 30:
                 last_handoff = now
                 if hand_off_watch():
