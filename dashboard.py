@@ -5,15 +5,18 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import socket
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
-from ict.journal import snapshot
+from ict.journal import desk_payload
+from ict.okx_data import fetch_last
 
 ROOT = Path(__file__).resolve().parent
 INDEX = ROOT / "dashboard" / "index.html"
+INST_RE = re.compile(r"^[A-Z0-9-]{3,24}$")
 
 
 def lan_ip() -> str:
@@ -40,13 +43,27 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self) -> None:
-        path = urlparse(self.path).path
+        parsed = urlparse(self.path)
+        path = parsed.path
         if path in {"/", "/index.html"}:
             self._send(200, INDEX.read_bytes(), "text/html; charset=utf-8")
             return
         if path == "/api/desk":
-            payload = json.dumps(snapshot()).encode("utf-8")
+            payload = json.dumps(desk_payload()).encode("utf-8")
             self._send(200, payload, "application/json; charset=utf-8")
+            return
+        if path == "/api/tickers":
+            raw = parse_qs(parsed.query).get("instIds", [""])[0]
+            ids = [part.strip() for part in raw.split(",") if part.strip()]
+            tickers = []
+            for inst in ids:
+                if not INST_RE.match(inst):
+                    continue
+                try:
+                    tickers.append({"instId": inst, "last": fetch_last(inst)})
+                except Exception as exc:
+                    tickers.append({"instId": inst, "error": str(exc)})
+            self._send(200, json.dumps({"tickers": tickers}).encode(), "application/json; charset=utf-8")
             return
         self._send(404, b"not found", "text/plain")
 

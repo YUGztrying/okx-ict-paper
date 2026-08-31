@@ -14,6 +14,7 @@ from fabio.model import analyze as analyze_fabio
 from ict.journal import append, consecutive_losses, load_open, save_open, stats, write_desk
 from ict.model import Fiche, analyze as analyze_ict
 from ict.okx_data import fetch_candles, fetch_last
+from ict.sizing import position_size
 
 ROOT = Path(__file__).resolve().parent
 
@@ -124,6 +125,12 @@ def maybe_fill(fiche: Fiche, cfg: dict, book: str) -> None:
         "opened_at": datetime.now(timezone.utc).isoformat(),
         "reasons": fiche.reasons,
         "strategy": book,
+        **position_size(
+            float(fiche.entry),
+            float(fiche.stop),
+            equity=float(cfg.get("default_equity_usdt", 10000)),
+            risk_pct=float(cfg["risk_pct"]),
+        ),
     }
     open_state[fiche.inst_id] = pos
     save_open(open_state, book)

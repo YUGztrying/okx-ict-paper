@@ -35,6 +35,13 @@ class BlotterMarkup(unittest.TestCase):
         self.assertNotIn('data-book="ict"', block)
         self.assertIn('id="books"', rest.split("</header>", 1)[1][:400])
 
+    def test_open_size_and_live_mark_hooks(self) -> None:
+        self.assertIn('id="opens"', HTML)
+        self.assertIn("wss://ws.okx.com:8443/ws/v5/public", HTML)
+        self.assertIn("/api/tickers?instIds=", HTML)
+        self.assertIn("data-live-pnl", HTML)
+        self.assertIn("Notional", HTML)
+
 
 if __name__ == "__main__":
     unittest.main()
