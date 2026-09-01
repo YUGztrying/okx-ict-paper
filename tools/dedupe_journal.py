@@ -5,9 +5,10 @@ Before the one-scan-per-bar fix, a 15m close triggered one full desk scan per
 instrument, so every instrument was journaled twice per bar. Earlier still, the
 `--loop` era rescanned the same bar every few minutes — up to five times.
 
-The desk decides once per bar per instrument per book, so that is what the
-journal should hold. This keeps the FIRST entry per (bar, instrument, type)
-and drops the repeats.
+The desk decides once per bar per instrument per STRATEGY, so that is what the
+journal should hold. This keeps the FIRST entry per (bar, instrument, type,
+strategy) and drops the repeats — dropping the strategy from that key would
+collapse ICT's veto and Fabio's into one, which are two real decisions.
 
 Trades are never touched. paper_fill and paper_close are the record this desk
 exists to produce; they were verified unique, and a dedupe heuristic has no
@@ -17,7 +18,7 @@ The bar is the 15m wall-clock bucket the entry was logged in — entries land
 within seconds of the close they decided on, so the bucket identifies the bar.
 
     python tools/dedupe_journal.py            # report only
-    python tools/dedupe_journal.py --apply    # rewrite the journals
+    python tools/dedupe_journal.py --apply    # rewrite the book
 """
 
 from __future__ import annotations
@@ -29,7 +30,7 @@ from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-BOOKS = {"ict": ROOT / "journal/runs.jsonl", "fabio": ROOT / "journal/fabio/runs.jsonl"}
+BOOK = ROOT / "journal/runs.jsonl"
 BAR_SECONDS = 900
 COLLAPSIBLE = ("stand_down", "error")
 
@@ -47,7 +48,7 @@ def dedupe(events: list[dict]) -> tuple[list[dict], list[dict]]:
         if event.get("type") not in COLLAPSIBLE:
             kept.append(event)
             continue
-        key = (bar_bucket(event), event.get("inst_id"), event.get("type"))
+        key = (bar_bucket(event), event.get("inst_id"), event.get("type"), event.get("strategy"))
         if key in seen:
             dropped.append(event)
             continue
@@ -67,7 +68,7 @@ def main() -> int:
     ap.add_argument("--apply", action="store_true", help="rewrite the journals (default: report only)")
     args = ap.parse_args()
 
-    for book, path in BOOKS.items():
+    for book, path in (("desk", BOOK),):
         events = read(path)
         kept, dropped = dedupe(events)
         by_type = Counter(e["type"] for e in dropped)

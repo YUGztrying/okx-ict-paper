@@ -28,9 +28,9 @@ from typing import Callable
 
 from fabio.model import analyze as analyze_fabio
 from ict.model import Fiche, analyze as analyze_ict
-from ict.fees import Fees, round_trip
+from ict.fees import Fees, net_rr, round_trip
 from ict.okx_data import Candle, bar_ms
-from ict.sizing import position_size
+from ict.sizing import leverage, position_size
 
 
 @dataclass
@@ -70,6 +70,7 @@ class Result:
     vetoes: Counter = field(default_factory=Counter)
     decisions: int = 0
     skipped: Counter = field(default_factory=Counter)
+    crowded_out: Counter = field(default_factory=Counter)
     first_ts: int | None = None
     last_ts: int | None = None
 
@@ -115,6 +116,8 @@ def _fabio(inst_id: str, last: float, hourly: list[Candle], entry: list[Candle],
 
 
 BOOKS: dict[str, Callable[..., Fiche]] = {"ict": _ict, "fabio": _fabio}
+# The desk trades one book: both models read the bar, one of them gets the slot.
+DESK = ("ict", "fabio")
 
 
 def run(
@@ -129,12 +132,19 @@ def run(
     fees: Fees | None = None,
 ) -> Result:
     """Replay `entry_bars` in order. Both lists must be sorted oldest first."""
-    if book not in BOOKS:
+    if book == "desk":
+        models = [(name, BOOKS[name]) for name in DESK]
+    elif book in BOOKS:
+        models = [(book, BOOKS[book])]
+    else:
         raise ValueError(f"unknown book {book}")
-    analyze = BOOKS[book]
     entry_limit = int(cfg.get("entry_limit", 96))
     htf_limit = int(cfg.get("htf_limit", 240))
     max_losses = int(cfg.get("max_consecutive_losses", 5))
+    cooldown_ms = float(cfg.get("loss_cooldown_hours", 24)) * 3_600_000
+    max_lev = float(cfg.get("max_leverage", 0) or 0)
+    on_net = bool(cfg.get("min_rr_on_net"))
+    floors = {"ict": float(cfg.get("min_rr", 2.0)), "fabio": float(cfg.get("fabio_min_rr", 1.5))}
     equity = float(cfg.get("default_equity_usdt", 10000))
     risk_pct = float(cfg.get("risk_pct", 0.5))
     width = bar_ms(entry_bar)
@@ -145,6 +155,7 @@ def run(
     result = Result(book=book, inst_id=inst_id)
     position: Trade | None = None
     streak = 0
+    halted_at: int | None = None   # when the loss breaker last tripped
 
     # Enough closed bars must exist on both timeframes before the first decision.
     start = entry_limit
@@ -179,12 +190,15 @@ def run(
                 if position.risk_usd:
                     position.r_net = (position.pnl - position.fee) / position.risk_usd
                 streak = streak + 1 if hit == "loss" else 0
+                halted_at = bar.ts if streak >= max_losses else None
                 position = None
 
         if position is not None:
             result.skipped["already_open"] += 1
             continue
-        if streak >= max_losses:
+        # A cooldown, not a ban: the old check only cleared on a win, and a
+        # halted book can never win. It blocked Fabio on BTC for 33,721 bars.
+        if streak >= max_losses and halted_at is not None and bar.ts - halted_at < cooldown_ms:
             result.skipped["loss_streak"] += 1
             continue
 
@@ -192,25 +206,54 @@ def run(
         window = entry_bars[max(0, i - entry_limit + 1) : i + 1]
         cut = bisect_right(htf_ts, closed_at - htf_width)
         htf = hourly_bars[max(0, cut - htf_limit) : cut]
-        try:
-            fiche = analyze(inst_id, bar.close, htf, window, cfg, now)
-        except Exception as exc:  # a model that raises is a finding, not a crash
-            result.skipped[f"error:{type(exc).__name__}"] += 1
-            continue
 
-        result.decisions += 1
-        if not fiche.passed:
-            for name in fiche.missing:
-                result.vetoes[name] += 1
+        # Every model reads the bar before any of them takes the slot. Running
+        # them in sequence and filling the first passer would hand the book to
+        # whichever one happens to be listed first.
+        ready: list[tuple[str, Fiche]] = []
+        for name, analyze in models:
+            try:
+                fiche = analyze(inst_id, bar.close, htf, window, cfg, now)
+            except Exception as exc:  # a model that raises is a finding, not a crash
+                result.skipped[f"error:{name}:{type(exc).__name__}"] += 1
+                continue
+            result.decisions += 1
+            if not fiche.passed:
+                for missing in fiche.missing:
+                    result.vetoes[f"{name}:{missing}" if len(models) > 1 else missing] += 1
+                continue
+            if not (fiche.entry and fiche.stop and fiche.target):
+                result.skipped["incomplete_levels"] += 1
+                continue
+            lev = leverage(float(fiche.entry), float(fiche.stop), risk_pct)
+            if max_lev and lev > max_lev:
+                result.skipped["stop_too_tight"] += 1
+                continue
+            if on_net and net_rr(float(fiche.entry), float(fiche.stop),
+                                 float(fiche.target), fees.taker) < floors.get(name, 0.0):
+                result.skipped["rr_net_below_min"] += 1
+                continue
+            ready.append((name, fiche))
+
+        if not ready:
             continue
-        if not (fiche.entry and fiche.stop and fiche.target):
-            result.skipped["incomplete_levels"] += 1
-            continue
+        # Best reward-to-risk AFTER fees wins, the same rule paper.arbitrate
+        # applies live: a wide gross R:R on a stop so tight the fees eat a third
+        # of it is worth less than a narrower one with room to breathe.
+        ready.sort(
+            key=lambda item: net_rr(
+                float(item[1].entry), float(item[1].stop), float(item[1].target), fees.taker
+            ),
+            reverse=True,
+        )
+        name, fiche = ready[0]
+        for other, _ in ready[1:]:
+            result.crowded_out[other] += 1
 
         size = position_size(float(fiche.entry), float(fiche.stop), equity=equity, risk_pct=risk_pct)
         position = Trade(
             inst_id=inst_id,
-            book=book,
+            book=name,
             bias=fiche.bias,
             entry=float(fiche.entry),
             stop=float(fiche.stop),

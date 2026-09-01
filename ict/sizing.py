@@ -12,6 +12,20 @@ def risk_usd(equity: float = DEFAULT_EQUITY, risk_pct: float = DEFAULT_RISK_PCT)
     return float(equity) * (float(risk_pct) / 100.0)
 
 
+def leverage(entry: float, stop: float, risk_pct: float = DEFAULT_RISK_PCT) -> float:
+    """Notional as a multiple of equity.
+
+    Equity cancels out of this: the stop decides the leverage, not the account
+    size. `leverage = risk_pct / stop_pct`, so at 0.5% risk a 1% stop is 0.5x
+    and a 0.04% stop is 12.5x. Nothing in the strategies bounds the stop, so
+    nothing bounds this either unless the desk says so.
+    """
+    entry, dist = float(entry), abs(float(entry) - float(stop))
+    if not entry or not dist:
+        return 0.0
+    return (float(risk_pct) / 100.0) * entry / dist
+
+
 def position_size(
     entry: float,
     stop: float,
@@ -37,6 +51,7 @@ def position_size(
         "notional": qty * float(entry),
         "stop_dist": dist,
         "risk_usd_actual": risk,
+        "leverage": (qty * float(entry) / float(equity)) if equity else 0.0,
     }
     if spec is None:
         return out
@@ -51,6 +66,7 @@ def position_size(
             "qty": filled,
             "notional": filled * float(entry),
             "risk_usd_actual": filled * dist,
+            "leverage": (filled * float(entry) / float(equity)) if equity else 0.0,
             "ct_val": spec.ct_val,
         }
     )

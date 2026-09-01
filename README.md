@@ -38,4 +38,20 @@ python dashboard.py                     # blotter on http://<LAN>:8787
 5. Unfilled 15m FVG in discount/premium
 6. R:R ≥ 2, no open paper, no 5-loss streak
 
-Fills and stand-downs go to `journal/runs.jsonl`. Open paper lives in `journal/open.json`. Fabio’s journal is `journal/fabio/`.
+One book. Fills, stand-downs and closes all go to `journal/runs.jsonl`, open
+paper to `journal/open.json`, and every line carries `strategy` — `ict` or
+`fabio`. The dashboard's ICT and Fabio tabs are filters over that one ledger,
+not separate books. An older `journal/fabio/` is folded in on startup.
+
+Three guards the 365-day replay argued for, all set in `config.toml`:
+`max_leverage` (a stop decides the leverage — `risk_pct / stop_pct` — and
+nothing in either strategy bounds the stop), `loss_cooldown_hours` (the loss
+breaker is a pause, not a ban: it used to clear only on a win, and a halted
+strategy can never win), and `min_rr_on_net` (the R:R gate applied to the
+number the account actually receives). `python -m backtest sweep` prints what
+each one costs before you turn it on.
+
+One position per coin, whichever strategy found it. When both fire on the same
+bar the better reward-to-risk **after fees** takes the slot and the other is
+journaled as a `crowded_out` stand-down — so the cost of sharing a book is a
+number you can read, not a strategy that mysteriously went quiet.

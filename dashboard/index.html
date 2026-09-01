@@ -221,7 +221,8 @@
     </div>
   </header>
   <div class="books" id="books">
-    <button type="button" data-book="ict" class="on">ICT</button>
+    <button type="button" data-book="desk" class="on">Tout</button>
+    <button type="button" data-book="ict">ICT</button>
     <button type="button" data-book="fabio">Fabio</button>
     <button type="button" data-book="compare">Vs</button>
   </div>
@@ -371,7 +372,7 @@
     const TITLES = { home: "Dashboard", history: "Trade History", charts: "Analytics", settings: "Settings" };
     const START = 10000;
     const RISK = 50;
-    let RAW = null, DATA = null, BOOK = "ict", filter = "all", query = "";
+    let RAW = null, DATA = null, BOOK = "desk", filter = "all", query = "";
     const TICK = {};
     let tickSrc = "scan";
     let tickWs = null, tickRest = null, tickPing = null, tickKey = "";
@@ -503,11 +504,9 @@
     }
 
     function openInstIds() {
-      const ids = new Set();
-      ["ict", "fabio"].forEach((name) => {
-        Object.keys(deskOf(name).open || {}).forEach((id) => ids.add(id));
-      });
-      return [...ids];
+      // The desk view holds every open position, whatever tagged it — a
+      // position with no strategy tag would fall out of a per-strategy loop.
+      return Object.keys(deskOf("desk").open || {});
     }
 
     function openCard(inst, pos, label, book) {
@@ -522,7 +521,7 @@
       const cls = pnl > 0 ? "up" : pnl < 0 ? "down" : "";
       return `<article class="card open-live" data-key="${key}" data-inst="${inst}" data-book="${book}">
         <div class="top">
-          <div><div class="sym">${pair(inst)}</div><div class="kind">${label} · ${pos.bias || "—"} · paper</div></div>
+          <div><div class="sym">${pair(inst)}</div><div class="kind">${labelOf(pos.strategy) || label} · ${pos.bias || "—"} · paper</div></div>
           <div class="live-pnl money ${cls}" data-live-pnl="${key}">${money(pnl)}</div>
         </div>
         <div class="live-meta" data-live-meta="${key}">${r >= 0 ? "+" : ""}${r.toFixed(2)} R · mark ${px(last)}</div>
@@ -542,7 +541,7 @@
       const el = document.getElementById("opens");
       const books = BOOK === "compare"
         ? [["ict", "ICT 2022"], ["fabio", "Fabio AAA"]]
-        : BOOK === "fabio" ? [["fabio", "Fabio AAA"]] : [["ict", "ICT 2022"]];
+        : [[BOOK, labelOf(BOOK)]];
       const rows = [];
       books.forEach(([key, label]) => {
         Object.entries(deskOf(key).open || {}).forEach(([inst, pos]) => rows.push(openCard(inst, pos, label, key)));
@@ -674,7 +673,7 @@
       const openPos = ev.type === "paper_fill" && DATA.open && DATA.open[ev.inst_id];
       let pnl;
       if (ev.type === "paper_close") pnl = `<div class="money ${r >= 0 ? "up" : "down"}">${money(r)}</div>`;
-      else if (openPos) pnl = `<div class="money" data-open-pnl="${ev.inst_id}" data-open-book="${BOOK === "compare" ? "ict" : BOOK}">${money(uPnl(openPos, markOf(ev.inst_id, openPos.entry)))}</div>`;
+      else if (openPos) pnl = `<div class="money" data-open-pnl="${ev.inst_id}" data-open-book="${ev.strategy || (BOOK === "compare" ? "ict" : BOOK)}">${money(uPnl(openPos, markOf(ev.inst_id, openPos.entry)))}</div>`;
       else pnl = `<div class="hint">${ago(ev.logged_at)}</div>`;
       const sizeLine = sz ? ` · ${usd(sz.notional)}` : "";
       return `<div class="card">
@@ -700,13 +699,13 @@
       const sideCls = side === "SELL" ? "sell" : side === "BUY" ? "buy" : "none";
       const miss = (ev.missing || []).map((m) => `<span>${m}</span>`).join("");
       const reasons = (ev.reasons || []).map((r) => `<div>${r}</div>`).join("");
-      const bookKey = ev.strategy || (BOOK === "fabio" ? "fabio" : "ict");
+      const bookKey = ev.strategy || (BOOK === "compare" ? "ict" : BOOK);
       const livePos = isOpen ? (open[ev.inst_id] || pos) : pos;
       const sz = livePos.entry ? sizeOf(livePos) : null;
       const actions = isOpen
         ? `<div class="actions"><button class="ghost" type="button" disabled>Modify</button><button class="danger" type="button" disabled>Cancel order</button></div>`
         : `<details class="more"><summary>View details</summary>${reasons || ev.error || "No extra notes."}</details>`;
-      const bookLabel = ev.strategy === "fabio" ? "Fabio AAA" : "ICT paper";
+      const bookLabel = labelOf(ev.strategy || "ict");
       const extra = ev.type === "error"
         ? `<div><span>Error</span><div>${ev.error || "—"}</div></div>`
         : ev.type === "stand_down"
@@ -743,9 +742,16 @@
       return `${ev.inst_id} ${ev.type} ${ev.bias} ${(ev.missing || []).join(" ")}`.toLowerCase().includes(query);
     }
 
+    // One book. "desk" is all of it; ict and fabio are filters over the same
+    // ledger, which is why a position shows up in exactly two of the three.
+    const BOOK_LABEL = { desk: "Desk", ict: "ICT 2022", fabio: "Fabio AAA" };
+    function labelOf(name) { return BOOK_LABEL[name] || name; }
+
     function deskOf(name) {
       if (RAW && RAW.books && RAW.books[name]) return RAW.books[name];
-      if (name === "ict" && RAW && !RAW.books) return RAW; // payload written before books
+      // Payloads written before the single book: no "desk" view, ICT at the top.
+      if (name === "desk" && RAW && RAW.books && RAW.books.ict) return RAW.books.ict;
+      if ((name === "ict" || name === "desk") && RAW && !RAW.books) return RAW;
       return { feed: [], trades: [], stats: {}, open: {} };
     }
 
@@ -780,6 +786,7 @@
           <div class="label">${label}</div>
           <div class="pnl ${a.pnl > 0 ? "" : a.pnl < 0 ? "neg" : "flat"}">${money(a.pnl)}</div>
           <div class="hint">${s.fills || 0} fills · ${s.stand_downs || 0} vetos · ${a.wr == null ? "—" : Math.round(a.wr * 100) + "%"} wr</div>
+          <div class="hint">${s.crowded_out || 0} écartés par l'autre stratégie</div>
         </div>`;
       }).join("");
     }
@@ -789,7 +796,7 @@
     const ERROR_FRESH_MS = 2 * 60 * 60 * 1000;
 
     function renderAlert() {
-      const books = BOOK === "compare" ? [["ict", "ICT 2022"], ["fabio", "Fabio AAA"]] : [[BOOK, BOOK === "fabio" ? "Fabio AAA" : "ICT 2022"]];
+      const books = BOOK === "compare" ? [["ict", "ICT 2022"], ["fabio", "Fabio AAA"]] : [[BOOK, labelOf(BOOK)]];
       const rows = books
         .map(([key, label]) => [label, deskOf(key)])
         .filter(([, d]) => {
