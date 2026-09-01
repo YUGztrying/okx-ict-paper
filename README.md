@@ -33,8 +33,13 @@ python dashboard.py                     # blotter on http://<LAN>:8787
 
 1. NY weekly + daily bias agree
 2. One draw (PDH/PDL or PWH/PWL)
-3. Delivery after an Asia sweep — not Judas
-4. Session score ≥ 3 (dead zone = veto)
+3. Asia sweep against the bias in the last 12 bars, then displacement on the
+   current 15m close (body ≥ 55% of range, past the prior bar's extreme). Asia
+   is the pre-08:00 **UTC** range, not the Tokyo killzone in `ict/sessions.py`.
+   Judas is not detected; that displacement is the whole test.
+4. Session score ≥ `session_min_score` (3). The dead zone scores 2, so it fails
+   on that threshold rather than on a veto of its own — set the minimum to 2
+   and dead-zone entries pass.
 5. Unfilled 15m FVG in discount/premium
 6. R:R ≥ 2, no open paper, no 5-loss streak
 
