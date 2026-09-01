@@ -70,6 +70,22 @@ class OneLedger(unittest.TestCase):
                 self.assertEqual(journal.stats("ict")["fills"], 1)
                 self.assertEqual(journal.stats("fabio")["fills"], 1)
 
+    def test_a_line_older_than_the_strategy_tag_still_belongs_to_ict(self) -> None:
+        """22 lines in the live journal predate the tag. They came from the
+        ICT-only file, which is what append() has always defaulted to."""
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with patch.object(journal, "JOURNAL_DIR", root):
+                journal.invalidate_cache()
+                root.mkdir(parents=True, exist_ok=True)
+                (root / "runs.jsonl").write_text(
+                    json.dumps({"logged_at": "2026-01-01T10:00:00",
+                                "type": "stand_down", "inst_id": "BTC-USDT",
+                                "missing": ["amd"]}) + "\n", encoding="utf-8")
+                self.assertEqual(journal.stats("ict")["stand_downs"], 1)
+                self.assertEqual(journal.stats("fabio")["stand_downs"], 0)
+                self.assertEqual(journal.stats()["stand_downs"], 1)
+
     def test_payload_carries_the_book_and_its_two_views(self) -> None:
         with TemporaryDirectory() as tmp:
             with patch.object(journal, "JOURNAL_DIR", Path(tmp)):
