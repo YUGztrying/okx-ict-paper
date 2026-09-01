@@ -16,7 +16,6 @@ content in French, insurance tooling.
 - Keep code and config minimal. Small beats clever.
 
 ## Never do
-- Never touch live trading logic without asking first. This repo is
-  paper trading, but treat it as if real.
-- Never write outside this repo without asking.
-- Never modify API keys or config with secrets without asking.
+- Never write outside the current git repository directory tree under any circumstances.
+- Never modify live trading logic, secrets, or API keys.
+- Never execute destructive git operations (force push, hard reset) without explicit confirmation.
