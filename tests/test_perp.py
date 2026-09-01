@@ -164,5 +164,46 @@ class DeskIntegration(unittest.TestCase):
         self.assertEqual(pos["stop"], round_price(pos["stop"], BTC, "down"))
 
 
+
+class PerProductRates(unittest.TestCase):
+    """OKX charges spot at twice the perp rate on this account.
+
+    Two spot positions outlived the config that opened them: they were carried
+    across the switch to perpetuals and closed under it, charged $14.40 in perp
+    fees where OKX would have taken $28.79. The instrument id is what says
+    which table applies, so it is what decides.
+    """
+
+    CFG = {"fees": {"taker_pct": 0.05, "maker_pct": 0.02,
+                    "spot": {"taker_pct": 0.10, "maker_pct": 0.08}}}
+
+    def test_the_instrument_picks_the_table(self) -> None:
+        self.assertAlmostEqual(Fees.from_config(self.CFG, "BTC-USDT-SWAP").taker, 0.0005)
+        self.assertAlmostEqual(Fees.from_config(self.CFG, "BTC-USDT").taker, 0.0010)
+        self.assertAlmostEqual(Fees.from_config(self.CFG, "BTC-USDT").maker, 0.0008)
+
+    def test_no_instrument_means_the_desk_default(self) -> None:
+        """The desk trades perpetuals, so that is what an unnamed rate is."""
+        self.assertAlmostEqual(Fees.from_config(self.CFG).taker, 0.0005)
+
+    def test_a_config_without_spot_rates_falls_back_rather_than_crashing(self) -> None:
+        flat = {"fees": {"taker_pct": 0.05, "maker_pct": 0.02}}
+        self.assertAlmostEqual(Fees.from_config(flat, "BTC-USDT").taker, 0.0005)
+
+    def test_the_real_config_carries_both(self) -> None:
+        cfg = tomllib.load((ROOT / "config.toml").open("rb"))
+        self.assertAlmostEqual(Fees.from_config(cfg, "BTC-USDT-SWAP").taker, 0.0005)
+        self.assertAlmostEqual(Fees.from_config(cfg, "BTC-USDT").taker, 0.0010)
+
+    def test_the_understated_close_reproduces(self) -> None:
+        """The BTC spot short that closed at 13:06: $7.90 charged, $15.79 owed."""
+        qty, entry, exit_px = 0.10090572983096223, 78919.0, 77609.2
+        perp = round_trip(entry, exit_px, qty, Fees.from_config(self.CFG, "BTC-USDT-SWAP").taker)
+        spot = round_trip(entry, exit_px, qty, Fees.from_config(self.CFG, "BTC-USDT").taker)
+        self.assertAlmostEqual(perp, 7.90, places=1)
+        self.assertAlmostEqual(spot, 15.79, places=1)
+        self.assertAlmostEqual(spot / perp, 2.0, places=6)
+
+
 if __name__ == "__main__":
     unittest.main()

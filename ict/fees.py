@@ -19,6 +19,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
+def product_of(inst_id: str | None) -> str:
+    """OKX charges spot and perpetuals at different rates — at Lv1 Regular,
+    twice as much on spot. The instrument id is what says which."""
+    return "swap" if (inst_id or "").upper().endswith("-SWAP") else "spot"
+
+
 @dataclass(frozen=True)
 class Fees:
     """Rates as fractions: 0.0005 is OKX perp taker at Lv1."""
@@ -27,8 +33,18 @@ class Fees:
     maker: float = 0.0002
 
     @classmethod
-    def from_config(cls, cfg: dict) -> "Fees":
+    def from_config(cls, cfg: dict, inst_id: str | None = None) -> "Fees":
+        """Rates for one instrument, or the desk's default when none is named.
+
+        The desk trades perpetuals, so `[fees]` holds the perp rates and that
+        is the default. But a position can outlive the config that opened it —
+        two spot positions carried across the switch to perps and closed under
+        it, and were charged the perp rate: half of what OKX would have taken.
+        Naming the instrument makes the right table apply on its own.
+        """
         raw = cfg.get("fees") or {}
+        if inst_id is not None and product_of(inst_id) == "spot":
+            raw = raw.get("spot") or raw
         return cls(
             taker=float(raw.get("taker_pct", 0.05)) / 100.0,
             maker=float(raw.get("maker_pct", 0.02)) / 100.0,
