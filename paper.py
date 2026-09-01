@@ -45,6 +45,28 @@ def underlying(inst_id: str) -> str:
     return inst_id.split("-", 1)[0].upper()
 
 
+# A position on an instrument the socket is not subscribed to still has to be
+# marked — it is a live position whatever the config now says. But update_open
+# runs on every ticker batch, which is several times a second, so reaching for
+# REST each time is a request storm against a 20-per-2s public limit. The
+# desk's own instruments always come from the socket and never touch this; a
+# retired one is marked at most this often.
+REST_MARK_TTL = 5.0
+_rest_mark: dict[str, tuple[float, float]] = {}
+
+
+def mark_price(inst_id: str, marks: dict[str, float] | None = None) -> float:
+    if marks and inst_id in marks:
+        return float(marks[inst_id])
+    cached = _rest_mark.get(inst_id)
+    now = time.time()
+    if cached and now - cached[0] < REST_MARK_TTL:
+        return cached[1]
+    last = fetch_last(inst_id)
+    _rest_mark[inst_id] = (now, last)
+    return last
+
+
 def update_open(cfg: dict, marks: dict[str, float] | None = None) -> bool:
     fees = Fees.from_config(cfg)
     open_state = load_open()
@@ -52,7 +74,7 @@ def update_open(cfg: dict, marks: dict[str, float] | None = None) -> bool:
     for inst_id, pos in list(open_state.items()):
         strategy = pos.get("strategy", "ict")
         try:
-            last = float(marks[inst_id]) if marks and inst_id in marks else fetch_last(inst_id)
+            last = mark_price(inst_id, marks)
         except Exception as exc:
             print(f"[{strategy}] {inst_id}: mark error {exc}", file=sys.stderr)
             continue
