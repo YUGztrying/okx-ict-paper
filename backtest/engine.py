@@ -28,6 +28,7 @@ from typing import Callable
 
 from fabio.model import analyze as analyze_fabio
 from ict.model import Fiche, analyze as analyze_ict
+from ict.fees import Fees, round_trip
 from ict.okx_data import Candle, bar_ms
 from ict.sizing import position_size
 
@@ -48,10 +49,17 @@ class Trade:
     bars_held: int = 0
     qty: float = 0.0
     risk_usd: float = 0.0
+    fee: float = 0.0
+    r_net: float | None = None
+    stop_pct: float = 0.0   # stop distance as a fraction of entry
 
     @property
     def pnl(self) -> float:
         return (self.r or 0.0) * self.risk_usd
+
+    @property
+    def pnl_net(self) -> float:
+        return self.pnl - self.fee
 
 
 @dataclass
@@ -118,6 +126,7 @@ def run(
     *,
     entry_bar: str = "15m",
     htf_bar: str = "1H",
+    fees: Fees | None = None,
 ) -> Result:
     """Replay `entry_bars` in order. Both lists must be sorted oldest first."""
     if book not in BOOKS:
@@ -130,6 +139,7 @@ def run(
     risk_pct = float(cfg.get("risk_pct", 0.5))
     width = bar_ms(entry_bar)
     htf_width = bar_ms(htf_bar)
+    fees = fees or Fees.from_config(cfg)
 
     htf_ts = [c.ts for c in hourly_bars]
     result = Result(book=book, inst_id=inst_id)
@@ -162,6 +172,12 @@ def run(
                 position.result = hit
                 position.r = (reward / risk) if hit == "win" and risk else (-1.0 if risk else 0.0)
                 position.closed_ts = bar.ts
+                # Exit at the level that was hit — the same price the R is
+                # measured against, so fee and result describe one trade.
+                exit_px = position.target if hit == "win" else position.stop
+                position.fee = round_trip(position.entry, exit_px, position.qty, fees.taker)
+                if position.risk_usd:
+                    position.r_net = (position.pnl - position.fee) / position.risk_usd
                 streak = streak + 1 if hit == "loss" else 0
                 position = None
 
@@ -202,7 +218,8 @@ def run(
             rr=float(fiche.rr or 0.0),
             opened_ts=bar.ts,
             qty=size["qty"],
-            risk_usd=size["risk_usd"],
+            risk_usd=size.get("risk_usd_actual") or size["risk_usd"],
+            stop_pct=abs(float(fiche.entry) - float(fiche.stop)) / float(fiche.entry),
         )
         result.trades.append(position)
 

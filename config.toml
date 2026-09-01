@@ -6,7 +6,14 @@ session_min_score = 3
 max_consecutive_losses = 5
 one_position_per_asset = true
 
-instruments = ["BTC-USDT", "ETH-USDT"]
+# Perpetuals, not spot. Different order book, different price series, and the
+# only product where these fees leave an edge intact. Contract size, lot and
+# tick come from OKX itself — see ict/instruments.py.
+instruments = ["BTC-USDT-SWAP", "ETH-USDT-SWAP"]
+
+# Apply min_rr to the reward-to-risk AFTER fees. Off for now: turning it on
+# changes which setups fire, so flip it once the backtest says what it costs.
+min_rr_on_net = false
 
 # OKX 15m FVG is the entry timeframe. HTF is NY daily + weekly.
 entry_bar = "15m"
@@ -20,3 +27,11 @@ entry_limit = 96
 # Fabio runs the full cash session (NY 08-16 ET) — it needs the whole profile.
 # The watch loop sits the public WS; this value is only for --loop.
 loop_minutes = 10
+
+# Your OKX rates, Lv1 Regular, perp USDT (GET /account/trade-fee), in percent
+# per execution, charged on notional. The desk enters and exits at market, so
+# taker applies on both sides. Keep this table last: everything after a TOML
+# table header belongs to it.
+[fees]
+taker_pct = 0.05
+maker_pct = 0.02

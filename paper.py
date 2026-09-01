@@ -15,8 +15,10 @@ from ict.journal import append, consecutive_losses, load_open, save_open, stats,
 from ict.model import Fiche, analyze as analyze_ict
 from ict.cloud import dispatch_next, persist_enabled, persist_journal, publish_dashboard
 from ict.exits import exit_result, realized_r
+from ict.fees import Fees, fee_in_r, net_rr, round_trip
 from ict.okx_data import closed_bars, closed_candle, fetch_candles, fetch_last, near_bar_boundary
 from ict.okx_ws import PublicFeed, drain_events, is_decision_bar
+from ict.instruments import round_price
 from ict.sizing import position_size
 
 ROOT = Path(__file__).resolve().parent
@@ -28,6 +30,7 @@ def load_config() -> dict:
 
 
 def update_open(cfg: dict, book: str, marks: dict[str, float] | None = None) -> bool:
+    fees = Fees.from_config(cfg)
     open_state = load_open(book)
     changed = False
     for inst_id, pos in list(open_state.items()):
@@ -40,6 +43,13 @@ def update_open(cfg: dict, book: str, marks: dict[str, float] | None = None) -> 
         if not hit:
             continue
         r = realized_r(float(pos["entry"]), float(pos["stop"]), float(pos["target"]), hit)
+        # Gross R is the strategy's result; net R is the one that reaches the
+        # account. Both are recorded — the gap is the cost of trading.
+        risk = float(pos.get("risk_usd_actual") or pos.get("risk_usd") or 0.0)
+        qty = float(pos.get("qty") or 0.0)
+        rate = float(pos.get("fee_rate") or fees.taker)
+        fee = round_trip(float(pos["entry"]), last, qty, rate) if qty else 0.0
+        pnl_gross = r * risk
         append(
             {
                 "type": "paper_close",
@@ -47,6 +57,10 @@ def update_open(cfg: dict, book: str, marks: dict[str, float] | None = None) -> 
                 "result": hit,
                 "last": last,
                 "r": r,
+                "fee": round(fee, 4),
+                "r_net": round((pnl_gross - fee) / risk, 4) if risk else None,
+                "pnl_gross": round(pnl_gross, 4),
+                "pnl_net": round(pnl_gross - fee, 4),
                 "position": pos,
             },
             book=book,
@@ -111,28 +125,71 @@ def maybe_fill(fiche: Fiche, cfg: dict, book: str) -> None:
             print(f"  [{ 'OK' if c.ok else 'NO' }] {c.name}: {c.detail}")
         return
 
+    fees = Fees.from_config(cfg)
+    spec = instrument_spec(fiche.inst_id)
+    entry, stop, target = float(fiche.entry), float(fiche.stop), float(fiche.target)
+    if spec is not None:
+        # A price off the tick is rejected by the exchange, so the desk must not
+        # record one. Stop and target round AWAY from entry: never claim a
+        # tighter stop or a nearer target than the grid allows.
+        long = (fiche.bias or "").lower() == "long"
+        entry = round_price(entry, spec, "near")
+        stop = round_price(stop, spec, "down" if long else "up")
+        target = round_price(target, spec, "down" if long else "up")
+
     pos = {
         "bias": fiche.bias,
-        "entry": fiche.entry,
-        "stop": fiche.stop,
-        "target": fiche.target,
+        "entry": entry,
+        "stop": stop,
+        "target": target,
         "rr": fiche.rr,
+        "rr_net": round(net_rr(entry, stop, target, fees.taker), 4),
+        "fee_rate": fees.taker,
+        "fee_r_est": round(fee_in_r(entry, stop, fees.taker), 4),
+        "sized_with_spec": spec is not None,
         "risk_pct": cfg["risk_pct"],
         "opened_at": datetime.now(timezone.utc).isoformat(),
         "reasons": fiche.reasons,
         "strategy": book,
         **position_size(
-            float(fiche.entry),
-            float(fiche.stop),
+            entry,
+            stop,
             equity=float(cfg.get("default_equity_usdt", 10000)),
             risk_pct=float(cfg["risk_pct"]),
+            spec=spec,
         ),
     }
+    if not pos.get("qty"):
+        append(
+            {
+                "type": "stand_down",
+                "inst_id": fiche.inst_id,
+                "missing": ["below_min_size"],
+                "last": fiche.last,
+                "reasons": fiche.reasons,
+            },
+            book=book,
+        )
+        print(f"{tag}: stand down — size rounds to zero contracts")
+        return
     open_state[fiche.inst_id] = pos
     save_open(open_state, book)
     append({"type": "paper_fill", "inst_id": fiche.inst_id, "last": fiche.last, "position": pos}, book=book)
     print(f"{tag}: PAPER FILL  {fiche.bias} @ {fiche.entry}")
     print(f"  stop {fiche.stop}  target {fiche.target}  R:R {fiche.rr:.2f}")
+
+
+def instrument_spec(inst_id: str):
+    """Contract specs, or None. A paper desk places no orders, so it keeps
+    running on fractional sizes rather than dying — but the fill records that
+    it was sized without them."""
+    try:
+        from ict.instruments import spec as lookup
+
+        return lookup(inst_id)
+    except Exception as exc:
+        print(f"{inst_id}: no contract spec ({exc})", file=sys.stderr)
+        return None
 
 
 def print_status() -> None:
