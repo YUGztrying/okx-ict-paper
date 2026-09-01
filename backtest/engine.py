@@ -185,7 +185,7 @@ def run(
     risk_pct = float(cfg.get("risk_pct", 0.5))
     width = bar_ms(entry_bar)
     htf_width = bar_ms(htf_bar)
-    fees = fees or Fees.from_config(cfg)
+    fees = fees or Fees.from_config(cfg, inst_id)
 
     htf_ts = [c.ts for c in hourly_bars]
     result = Result(book=book, inst_id=inst_id)

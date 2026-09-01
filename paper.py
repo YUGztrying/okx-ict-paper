@@ -68,7 +68,6 @@ def mark_price(inst_id: str, marks: dict[str, float] | None = None) -> float:
 
 
 def update_open(cfg: dict, marks: dict[str, float] | None = None) -> bool:
-    fees = Fees.from_config(cfg)
     open_state = load_open()
     changed = False
     for inst_id, pos in list(open_state.items()):
@@ -86,7 +85,9 @@ def update_open(cfg: dict, marks: dict[str, float] | None = None) -> bool:
         # account. Both are recorded — the gap is the cost of trading.
         risk = float(pos.get("risk_usd_actual") or pos.get("risk_usd") or 0.0)
         qty = float(pos.get("qty") or 0.0)
-        rate = float(pos.get("fee_rate") or fees.taker)
+        # The rate the position was opened at, or the one its own product
+        # charges today. A spot position must not be closed at perp rates.
+        rate = float(pos.get("fee_rate") or Fees.from_config(cfg, inst_id).taker)
         fee = round_trip(float(pos["entry"]), last, qty, rate) if qty else 0.0
         pnl_gross = r * risk
         append(
@@ -149,7 +150,7 @@ def blocked_reason(fiche: Fiche, cfg: dict, open_state: dict, strategy: str) -> 
 def build_position(fiche: Fiche, cfg: dict, strategy: str) -> dict | None:
     """The order the desk would send, priced on the exchange's grid. None when
     the risk budget rounds down to zero contracts."""
-    fees = Fees.from_config(cfg)
+    fees = Fees.from_config(cfg, fiche.inst_id)
     spec = instrument_spec(fiche.inst_id)
     entry, stop, target = float(fiche.entry), float(fiche.stop), float(fiche.target)
     if spec is not None:
