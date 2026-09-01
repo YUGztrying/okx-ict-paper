@@ -58,6 +58,12 @@ underneath — does the entry logic do anything at all. A random entry targeting
 R times its stop wins about 1/(1+R) of the time, so a book landing on that
 number is indistinguishable from the control.
 
+Every book reports its expectancy with a standard error and a verdict. Four
+trades at +1.17 R average carry an error of +/-1.25 R — the uncertainty is
+larger than the estimate, and the report says so rather than letting the
+average read like a result. Where an effect is too small to confirm, it names
+the sample size that would be needed.
+
 One position per coin, whichever strategy found it. When both fire on the same
 bar the better reward-to-risk **after fees** takes the slot and the other is
 journaled as a `crowded_out` stand-down — so the cost of sharing a book is a

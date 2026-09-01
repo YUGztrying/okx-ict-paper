@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from collections import Counter
 from datetime import datetime, timezone
+from math import sqrt
 
 from backtest.engine import Result
 
@@ -49,12 +50,30 @@ def metrics(result: Result) -> dict:
     stops = sorted(t.stop_pct for t in closed if t.stop_pct)
     notionals = [t.qty * t.entry for t in result.trades if t.qty]
 
+    # How much of the expectancy is signal and how much is 404 coin flips.
+    # Without this a +1.17 R average over four trades reads like a result.
+    n = len(closed)
+    mean = (sum(r_values) / n) if n else 0.0
+    if n > 1:
+        var = sum((r - mean) ** 2 for r in r_values) / (n - 1)
+        sd = sqrt(var)
+        se = sd / sqrt(n)
+    else:
+        sd = se = 0.0
+    t_stat = (mean / se) if se else None
+    # Trades needed for an effect this size to clear two standard errors.
+    n_needed = int((2 * sd / abs(mean)) ** 2) if (sd and mean) else None
+
     def pct(seq, q):
         if not seq:
             return None
         return seq[min(len(seq) - 1, int(q * len(seq)))]
 
     return {
+        "sd_r": sd,
+        "se_r": se,
+        "t_stat": t_stat,
+        "n_for_significance": n_needed,
         "total_r_net": sum(r_net),
         "expectancy_r_net": (sum(r_net) / len(closed)) if closed else None,
         "fees_usd": sum(fees),
@@ -99,6 +118,24 @@ def _num(value, fmt: str = "{:.2f}", dash: str = "—") -> str:
     return fmt.format(value)
 
 
+def _verdict(m: dict) -> str:
+    """Whether the average is telling you anything.
+
+    A backtest that reports an expectancy without its error invites reading
+    noise as edge — four trades at +1.17 R average is not a strategy, it is
+    four trades. Two standard errors is the usual bar; below it, the honest
+    statement is that the result is indistinguishable from zero.
+    """
+    t = m.get("t_stat")
+    if t is None or not m["closed"]:
+        return "pas assez de trades"
+    if abs(t) < 2:
+        need = m.get("n_for_significance")
+        tail = f" (il en faudrait ~{need})" if need and need > m["closed"] else ""
+        return f"INDISTINGUABLE DE ZERO sur {m['closed']} trades{tail}"
+    return "significatif" + (" (positif)" if t > 0 else " (negatif)")
+
+
 def render(result: Result) -> str:
     m = metrics(result)
     lines = [
@@ -118,6 +155,9 @@ def render(result: Result) -> str:
             f"  friction       {_num(m['fee_drag_r'], '{:.3f}')} R par trade"
             f"   ·  {m['eaten_by_fees']} trade(s) gagnant(s) annule(s) par les frais",
             f"  profit factor  {_num(m['profit_factor'])}",
+            f"  significativite {_num(m['expectancy_r'], '{:+.3f}')}"
+            f" +/- {_num(m['se_r'], '{:.3f}')} R brut"
+            f"   t = {_num(m['t_stat'], '{:+.2f}')}   {_verdict(m)}",
             f"  max drawdown   {_num(m['max_drawdown_r'], '{:.2f}')} R",
             f"  avg win/loss   {_num(m['avg_win_r'], '{:+.2f}')} R / {_num(m['avg_loss_r'], '{:+.2f}')} R",
             f"  worst streak   {m['max_loss_streak']} losses  (best {m['max_win_streak']} wins)",
