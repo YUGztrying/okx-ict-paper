@@ -111,7 +111,11 @@ def events_for(strategy: str | None = None) -> list[dict[str, Any]]:
     events = _parse_lines()
     if strategy is None:
         return events
-    return [e for e in events if e.get("strategy") == strategy]
+    # A line written before `strategy` was recorded came from the ICT-only
+    # journal, and append() has always defaulted to "ict". Reading it back as
+    # belonging to no strategy contradicts how it was written, and drops it out
+    # of every per-strategy view.
+    return [e for e in events if (e.get("strategy") or "ict") == strategy]
 
 
 def consecutive_losses(inst_id: str, strategy: str | None = None,
