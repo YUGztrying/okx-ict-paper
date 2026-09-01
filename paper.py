@@ -11,7 +11,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fabio.model import analyze as analyze_fabio
-from ict.journal import append, consecutive_losses, load_open, save_open, stats, write_desk
+from ict.journal import (
+    absorb_legacy,
+    append,
+    consecutive_losses,
+    load_open,
+    save_open,
+    stats,
+    write_desk,
+)
 from ict.model import Fiche, analyze as analyze_ict
 from ict.cloud import dispatch_next, persist_enabled, persist_journal, publish_dashboard
 from ict.exits import exit_result, realized_r
@@ -29,15 +37,23 @@ def load_config() -> dict:
         return tomllib.load(fh)
 
 
-def update_open(cfg: dict, book: str, marks: dict[str, float] | None = None) -> bool:
+def underlying(inst_id: str) -> str:
+    """BTC-USDT-SWAP and BTC-USDT are the same coin. One book means one bet on
+    it: a perp long and a spot short are not two independent trades, they are
+    one confused one."""
+    return inst_id.split("-", 1)[0].upper()
+
+
+def update_open(cfg: dict, marks: dict[str, float] | None = None) -> bool:
     fees = Fees.from_config(cfg)
-    open_state = load_open(book)
+    open_state = load_open()
     changed = False
     for inst_id, pos in list(open_state.items()):
+        strategy = pos.get("strategy", "ict")
         try:
             last = float(marks[inst_id]) if marks and inst_id in marks else fetch_last(inst_id)
         except Exception as exc:
-            print(f"[{book}] {inst_id}: mark error {exc}", file=sys.stderr)
+            print(f"[{strategy}] {inst_id}: mark error {exc}", file=sys.stderr)
             continue
         hit = exit_result(pos["bias"], last, float(pos["stop"]), float(pos["target"]))
         if not hit:
@@ -63,68 +79,41 @@ def update_open(cfg: dict, book: str, marks: dict[str, float] | None = None) -> 
                 "pnl_net": round(pnl_gross - fee, 4),
                 "position": pos,
             },
-            book=book,
+            strategy=strategy,
         )
         del open_state[inst_id]
         changed = True
-        print(f"[{book}] CLOSED {inst_id} {hit} @ {last}  R={r:.2f}")
+        print(f"[{strategy}] CLOSED {inst_id} {hit} @ {last}  R={r:.2f}")
     if changed:
-        save_open(open_state, book)
+        save_open(open_state)
         write_desk()
-        persist_journal(f"paper {book} close")
+        persist_journal("paper close")
         publish_dashboard()
     return changed
 
 
-def maybe_fill(fiche: Fiche, cfg: dict, book: str) -> None:
-    open_state = load_open(book)
-    tag = f"[{book}] {fiche.inst_id}"
-    if fiche.inst_id in open_state:
-        append(
-            {
-                "type": "stand_down",
-                "inst_id": fiche.inst_id,
-                "missing": ["already_open"],
-                "last": fiche.last,
-                "reasons": fiche.reasons,
-            },
-            book=book,
-        )
-        print(f"{tag}: stand down — already in a paper position")
-        return
+def blocked_reason(fiche: Fiche, cfg: dict, open_state: dict, strategy: str) -> tuple[str, list[str]] | None:
+    """Why this setup cannot be taken, or None. Checked BEFORE arbitration so a
+    candidate that could never have filled does not crowd out one that could."""
+    if cfg.get("one_position_per_asset", True):
+        coin = underlying(fiche.inst_id)
+        held = [i for i in open_state if underlying(i) == coin]
+        if held:
+            return "already_open", [f"open: {', '.join(held)}"]
+    elif fiche.inst_id in open_state:
+        return "already_open", []
 
-    losses = consecutive_losses(fiche.inst_id, book)
+    losses = consecutive_losses(fiche.inst_id, strategy)
     if losses >= int(cfg["max_consecutive_losses"]):
-        append(
-            {
-                "type": "stand_down",
-                "inst_id": fiche.inst_id,
-                "missing": ["loss_streak"],
-                "last": fiche.last,
-                "reasons": fiche.reasons + [f"streak={losses}"],
-            },
-            book=book,
-        )
-        print(f"{tag}: stand down — {losses} losses in a row")
-        return
-
+        return "loss_streak", [f"streak={losses}"]
     if not fiche.passed:
-        append(
-            {
-                "type": "stand_down",
-                "inst_id": fiche.inst_id,
-                "missing": fiche.missing,
-                "last": fiche.last,
-                "bias": fiche.bias,
-                "reasons": fiche.reasons,
-            },
-            book=book,
-        )
-        print(f"{tag}: STAND DOWN  last={fiche.last}  missing={', '.join(fiche.missing)}")
-        for c in fiche.checks:
-            print(f"  [{ 'OK' if c.ok else 'NO' }] {c.name}: {c.detail}")
-        return
+        return "vetoed", []
+    return None
 
+
+def build_position(fiche: Fiche, cfg: dict, strategy: str) -> dict | None:
+    """The order the desk would send, priced on the exchange's grid. None when
+    the risk budget rounds down to zero contracts."""
     fees = Fees.from_config(cfg)
     spec = instrument_spec(fiche.inst_id)
     entry, stop, target = float(fiche.entry), float(fiche.stop), float(fiche.target)
@@ -150,7 +139,7 @@ def maybe_fill(fiche: Fiche, cfg: dict, book: str) -> None:
         "risk_pct": cfg["risk_pct"],
         "opened_at": datetime.now(timezone.utc).isoformat(),
         "reasons": fiche.reasons,
-        "strategy": book,
+        "strategy": strategy,
         **position_size(
             entry,
             stop,
@@ -159,24 +148,94 @@ def maybe_fill(fiche: Fiche, cfg: dict, book: str) -> None:
             spec=spec,
         ),
     }
-    if not pos.get("qty"):
-        append(
-            {
-                "type": "stand_down",
-                "inst_id": fiche.inst_id,
-                "missing": ["below_min_size"],
-                "last": fiche.last,
-                "reasons": fiche.reasons,
-            },
-            book=book,
-        )
-        print(f"{tag}: stand down — size rounds to zero contracts")
-        return
+    return pos if pos.get("qty") else None
+
+
+def stand_down(fiche: Fiche, strategy: str, missing: list[str], extra: list[str] | None = None) -> None:
+    append(
+        {
+            "type": "stand_down",
+            "inst_id": fiche.inst_id,
+            "missing": missing,
+            "last": fiche.last,
+            "bias": fiche.bias,
+            "reasons": fiche.reasons + (extra or []),
+        },
+        strategy=strategy,
+    )
+
+
+def commit(fiche: Fiche, pos: dict, strategy: str) -> None:
+    open_state = load_open()
     open_state[fiche.inst_id] = pos
-    save_open(open_state, book)
-    append({"type": "paper_fill", "inst_id": fiche.inst_id, "last": fiche.last, "position": pos}, book=book)
-    print(f"{tag}: PAPER FILL  {fiche.bias} @ {fiche.entry}")
-    print(f"  stop {fiche.stop}  target {fiche.target}  R:R {fiche.rr:.2f}")
+    save_open(open_state)
+    append(
+        {"type": "paper_fill", "inst_id": fiche.inst_id, "last": fiche.last, "position": pos},
+        strategy=strategy,
+    )
+    print(f"[{strategy}] {fiche.inst_id}: PAPER FILL  {fiche.bias} @ {pos['entry']}")
+    print(f"  stop {pos['stop']}  target {pos['target']}  R:R {pos['rr']:.2f} brut / {pos['rr_net']:.2f} net")
+
+
+def arbitrate(candidates: list[tuple[str, Fiche]], cfg: dict) -> None:
+    """One book, one position per asset — so when both strategies fire on the
+    same coin, only one of them can be taken.
+
+    The winner is the best reward-to-risk AFTER fees, because that is the number
+    the account actually collects: a 2.4 gross setup on a stop so tight the fees
+    eat a third of it is worth less than a 2.1 with room to breathe.
+
+    The loser is written down as `crowded_out`, naming who took the slot and at
+    what R:R. Without that line the cost of sharing a book is invisible — the
+    rarer strategy just looks like it stopped finding setups.
+    """
+    open_state = load_open()
+    ready: list[tuple[str, Fiche, dict]] = []
+    for strategy, fiche in candidates:
+        blocked = blocked_reason(fiche, cfg, open_state, strategy)
+        if blocked:
+            reason, extra = blocked
+            if reason == "vetoed":
+                stand_down(fiche, strategy, fiche.missing)
+                print(f"[{strategy}] {fiche.inst_id}: STAND DOWN  last={fiche.last}  "
+                      f"missing={', '.join(fiche.missing)}")
+                for c in fiche.checks:
+                    print(f"  [{ 'OK' if c.ok else 'NO' }] {c.name}: {c.detail}")
+            else:
+                stand_down(fiche, strategy, [reason], extra)
+                print(f"[{strategy}] {fiche.inst_id}: stand down — {reason}")
+            continue
+        if not (fiche.entry and fiche.stop and fiche.target):
+            stand_down(fiche, strategy, ["incomplete_levels"])
+            continue
+        pos = build_position(fiche, cfg, strategy)
+        if pos is None:
+            stand_down(fiche, strategy, ["below_min_size"])
+            print(f"[{strategy}] {fiche.inst_id}: stand down — size rounds to zero contracts")
+            continue
+        ready.append((strategy, fiche, pos))
+
+    if not ready:
+        return
+    ready.sort(key=lambda item: item[2]["rr_net"], reverse=True)
+    strategy, fiche, pos = ready[0]
+    for other, loser_fiche, loser_pos in ready[1:]:
+        stand_down(
+            loser_fiche,
+            other,
+            ["crowded_out"],
+            [f"crowded out by {strategy} on {fiche.inst_id}: "
+             f"R:R net {loser_pos['rr_net']:.2f} vs {pos['rr_net']:.2f}"],
+        )
+        print(f"[{other}] {loser_fiche.inst_id}: crowded out by {strategy} "
+              f"({loser_pos['rr_net']:.2f} net vs {pos['rr_net']:.2f})")
+    commit(fiche, pos, strategy)
+
+
+def maybe_fill(fiche: Fiche, cfg: dict, strategy: str) -> None:
+    """A single candidate, no competition. Kept because a lone signal is still
+    the common case — arbitrate() is what handles the collision."""
+    arbitrate([(strategy, fiche)], cfg)
 
 
 def instrument_spec(inst_id: str):
@@ -193,22 +252,21 @@ def instrument_spec(inst_id: str):
 
 
 def print_status() -> None:
-    for book in ("ict", "fabio"):
-        s = stats(book)
+    total = stats()
+    wr = f"{total['win_rate']*100:.1f}%" if total["win_rate"] is not None else "n/a"
+    print(f"desk: fills={total['fills']} vetos={total['stand_downs']} "
+          f"(dont {total['crowded_out']} crowded out) wr={wr}")
+    for strategy in ("ict", "fabio"):
+        s = stats(strategy)
         wr = f"{s['win_rate']*100:.1f}%" if s["win_rate"] is not None else "n/a"
-        print(f"{book}: fills={s['fills']} vetos={s['stand_downs']} wr={wr} open={list(load_open(book))}")
-
-
-def mark_all(cfg: dict, marks: dict[str, float] | None = None) -> None:
-    for book in ("ict", "fabio"):
-        update_open(cfg, book, marks)
+        held = [i for i, pos in load_open().items() if pos.get("strategy") == strategy]
+        print(f"  {strategy}: fills={s['fills']} vetos={s['stand_downs']} "
+              f"crowded_out={s['crowded_out']} wr={wr} open={held}")
 
 
 def rest_marks(cfg: dict) -> dict[str, float]:
     marks: dict[str, float] = {}
-    needed = set()
-    for book in ("ict", "fabio"):
-        needed.update(load_open(book).keys())
+    needed = set(load_open())
     if not needed:
         needed.update(cfg["instruments"])
     for inst in needed:
@@ -220,7 +278,7 @@ def rest_marks(cfg: dict) -> dict[str, float]:
 
 
 def any_open() -> bool:
-    return bool(load_open("ict") or load_open("fabio"))
+    return bool(load_open())
 
 
 def still_pending(pending: dict[str, int], seen_close: dict[str, int]) -> dict[str, int]:
@@ -249,7 +307,7 @@ def tick(cfg: dict, marks: dict[str, float] | None = None, seen_close: dict[str,
     Returns True when at least one instrument was analyzed.
     """
     print(f"\n=== {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')} ===")
-    mark_all(cfg, marks)
+    update_open(cfg, marks)
     bar = cfg["entry_bar"]
     scanned = False
     for inst in cfg["instruments"]:
@@ -259,7 +317,7 @@ def tick(cfg: dict, marks: dict[str, float] | None = None, seen_close: dict[str,
             last = float(marks[inst]) if marks and inst in marks else fetch_last(inst)
         except Exception as exc:
             print(f"{inst}: error {exc}", file=sys.stderr)
-            append({"type": "error", "inst_id": inst, "error": str(exc)}, book="ict")
+            append({"type": "error", "inst_id": inst, "error": str(exc)}, strategy="desk")
             continue
         if not entry or not hourly:
             print(f"{inst}: no closed {bar} bar yet", file=sys.stderr)
@@ -269,8 +327,12 @@ def tick(cfg: dict, marks: dict[str, float] | None = None, seen_close: dict[str,
                 continue
             seen_close[inst] = entry[-1].ts
         scanned = True
+        # Both strategies read the same bar before either one is allowed to take
+        # the slot — otherwise whichever runs first wins by running first.
+        candidates: list[tuple[str, Fiche]] = []
         try:
-            maybe_fill(
+            candidates.append((
+                "ict",
                 analyze_ict(
                     inst,
                     last,
@@ -279,17 +341,20 @@ def tick(cfg: dict, marks: dict[str, float] | None = None, seen_close: dict[str,
                     min_rr=float(cfg["min_rr"]),
                     session_min=int(cfg["session_min_score"]),
                 ),
-                cfg,
-                "ict",
-            )
+            ))
         except Exception as exc:
-            append({"type": "error", "inst_id": inst, "error": str(exc)}, book="ict")
+            append({"type": "error", "inst_id": inst, "error": str(exc)}, strategy="ict")
             print(f"[ict] {inst}: error {exc}", file=sys.stderr)
         try:
-            maybe_fill(analyze_fabio(inst, last, entry, min_rr=1.5), cfg, "fabio")
+            candidates.append(("fabio", analyze_fabio(inst, last, entry, min_rr=1.5)))
         except Exception as exc:
-            append({"type": "error", "inst_id": inst, "error": str(exc)}, book="fabio")
+            append({"type": "error", "inst_id": inst, "error": str(exc)}, strategy="fabio")
             print(f"[fabio] {inst}: error {exc}", file=sys.stderr)
+        try:
+            arbitrate(candidates, cfg)
+        except Exception as exc:
+            append({"type": "error", "inst_id": inst, "error": str(exc)}, strategy="desk")
+            print(f"{inst}: arbitration error {exc}", file=sys.stderr)
     if not scanned:
         return False
     write_desk()
@@ -340,12 +405,12 @@ def watch(cfg: dict, minutes: float, chain_after: float = 0) -> None:
             if ticks:
                 for inst, ev in ticks.items():
                     marks[inst] = ev.last
-                mark_all(cfg, marks)
+                update_open(cfg, marks)
             now = time.time()
             if any_open() and feed.stale(8.0) and now - last_watchdog >= 2.0:
                 last_watchdog = now
                 marks.update(rest_marks(cfg))
-                mark_all(cfg, marks)
+                update_open(cfg, marks)
             if near_bar_boundary(bar) and now - last_bar_rest >= 2.0:
                 last_bar_rest = now
                 for inst in cfg["instruments"]:
@@ -383,6 +448,11 @@ def main() -> int:
     parser.add_argument("--status", action="store_true")
     args = parser.parse_args()
     cfg = load_config()
+    # An older runner may still be writing the second journal. Fold whatever it
+    # left behind into the book before reading a single line of it.
+    moved = absorb_legacy()
+    if moved:
+        print(f"absorbed {moved} events from the old per-strategy journal")
 
     if args.status:
         print_status()

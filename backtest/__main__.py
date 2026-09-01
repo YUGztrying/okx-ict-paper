@@ -2,8 +2,9 @@
 """Backtest CLI.
 
     python -m backtest fetch --days 180
-    python -m backtest run --book ict
-    python -m backtest run --book both --inst BTC-USDT ETH-USDT
+    python -m backtest run --book desk          # the shared book: one slot per bar
+    python -m backtest run --book ict           # one model in isolation
+    python -m backtest run --book both --inst BTC-USDT-SWAP
 
 `fetch` needs network access to OKX (public endpoints, no key). `run` works
 entirely from the cache in data/.
@@ -45,7 +46,11 @@ def cmd_fetch(args: argparse.Namespace, cfg: dict) -> int:
 
 
 def cmd_run(args: argparse.Namespace, cfg: dict) -> int:
-    books = ("ict", "fabio") if args.book == "both" else (args.book,)
+    # "desk" is the book the money actually trades: both models, one slot,
+    # best net R:R wins. "both" replays them in isolation, which is the same
+    # history counted twice — useful for comparing the models, not for sizing
+    # an account.
+    books = ("desk", "ict", "fabio") if args.book == "both" else (args.book,)
     instruments = args.inst or cfg["instruments"]
     missing = False
     for inst in instruments:
@@ -81,7 +86,8 @@ def main() -> int:
     f.set_defaults(func=cmd_fetch)
 
     r = sub.add_parser("run", parents=[common], help="replay from the cache")
-    r.add_argument("--book", choices=("ict", "fabio", "both"), default="both")
+    r.add_argument("--book", choices=("desk", "ict", "fabio", "both"), default="both",
+                   help="desk = the shared book (default view includes it)")
     r.set_defaults(func=cmd_run)
 
     args = ap.parse_args()

@@ -154,7 +154,7 @@ class DeskIntegration(unittest.TestCase):
                        "max_consecutive_losses": 5, "fees": {"taker_pct": 0.05}}
                 with patch.object(paper, "instrument_spec", return_value=BTC):
                     paper.maybe_fill(fiche, cfg, "ict")
-                pos = journal.load_open("ict")["BTC-USDT-SWAP"]
+                pos = journal.load_open()["BTC-USDT-SWAP"]
 
         self.assertTrue(pos["sized_with_spec"])
         self.assertIn("contracts", pos)

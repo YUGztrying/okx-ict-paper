@@ -183,7 +183,7 @@ class Replay(unittest.TestCase):
 
         with patch.dict("backtest.engine.BOOKS", {"ict": boom}):
             res = run("ict", "BTC-USDT", entry, hourly, CFG)
-        self.assertGreater(res.skipped["error:ValueError"], 0)
+        self.assertGreater(res.skipped["error:ict:ValueError"], 0)
         self.assertEqual(res.decisions, 0)
 
 
@@ -259,6 +259,66 @@ class Cache(unittest.TestCase):
 
         data.fetch("BTC-USDT", "15m", days=365, now_ms=10**12, fetcher=stuck, pause=0)
         self.assertLessEqual(len(calls), 3)
+
+
+
+class DeskBook(unittest.TestCase):
+    """The desk trades one book, so the backtest has to replay one book.
+
+    Summing an ICT run and a Fabio run counts the same history twice: in real
+    life the second signal on a bar does not get a position, it gets a
+    crowded_out line. A backtest that misses this overstates both strategies.
+    """
+
+    def _fiche(self, inst_id, rr, stop_pct):
+        entry = 100.0
+        risk = entry * stop_pct
+        f = Fiche(inst_id=inst_id, last=entry, bias="long")
+        f.checks.append(Check("all", True, "stub"))
+        f.entry, f.stop, f.target = entry, entry - risk, entry + rr * risk
+        f.rr = rr
+        return f
+
+    def test_only_one_model_gets_the_slot(self) -> None:
+        entry = series(200, BAR_MS)
+        hourly = series(260, HOUR_MS)
+        # fabio looks better gross; its stop is 5x tighter, so fees eat it.
+        ict = lambda inst, *a, **k: self._fiche(inst, 2.0, 0.010)
+        fabio = lambda inst, *a, **k: self._fiche(inst, 2.2, 0.002)
+        with patch.dict("backtest.engine.BOOKS", {"ict": ict, "fabio": fabio}):
+            res = run("desk", "BTC-USDT-SWAP", entry, hourly, CFG)
+        self.assertTrue(res.trades)
+        # every fill is ICT's, and every one of them cost Fabio a signal
+        self.assertEqual({t.book for t in res.trades}, {"ict"})
+        self.assertEqual(res.crowded_out["fabio"], len(res.trades))
+        self.assertEqual(res.crowded_out["ict"], 0)
+
+    def test_a_vetoed_model_crowds_out_nobody(self) -> None:
+        entry = series(200, BAR_MS)
+        hourly = series(260, HOUR_MS)
+
+        def vetoed(inst, *a, **k):
+            f = Fiche(inst_id=inst, last=100.0, bias="unclear")
+            f.checks.append(Check("htf_bias", False, "stub"))
+            return f
+
+        with patch.dict("backtest.engine.BOOKS",
+                        {"ict": vetoed, "fabio": lambda inst, *a, **k: self._fiche(inst, 2.0, 0.01)}):
+            res = run("desk", "BTC-USDT-SWAP", entry, hourly, CFG)
+        self.assertEqual({t.book for t in res.trades}, {"fabio"})
+        self.assertEqual(sum(res.crowded_out.values()), 0)
+        # a desk run names which model each veto came from
+        self.assertTrue(any(k.startswith("ict:") for k in res.vetoes))
+
+    def test_the_shared_book_takes_fewer_trades_than_the_two_apart(self) -> None:
+        entry = series(200, BAR_MS)
+        hourly = series(260, HOUR_MS)
+        models = {"ict": lambda inst, *a, **k: self._fiche(inst, 2.0, 0.010),
+                  "fabio": lambda inst, *a, **k: self._fiche(inst, 2.2, 0.002)}
+        with patch.dict("backtest.engine.BOOKS", models):
+            desk = run("desk", "BTC-USDT-SWAP", entry, hourly, CFG)
+            apart = sum(len(run(b, "BTC-USDT-SWAP", entry, hourly, CFG).trades) for b in ("ict", "fabio"))
+        self.assertLess(len(desk.trades), apart)
 
 
 if __name__ == "__main__":

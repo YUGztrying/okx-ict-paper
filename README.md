@@ -38,4 +38,12 @@ python dashboard.py                     # blotter on http://<LAN>:8787
 5. Unfilled 15m FVG in discount/premium
 6. R:R ≥ 2, no open paper, no 5-loss streak
 
-Fills and stand-downs go to `journal/runs.jsonl`. Open paper lives in `journal/open.json`. Fabio’s journal is `journal/fabio/`.
+One book. Fills, stand-downs and closes all go to `journal/runs.jsonl`, open
+paper to `journal/open.json`, and every line carries `strategy` — `ict` or
+`fabio`. The dashboard's ICT and Fabio tabs are filters over that one ledger,
+not separate books. An older `journal/fabio/` is folded in on startup.
+
+One position per coin, whichever strategy found it. When both fire on the same
+bar the better reward-to-risk **after fees** takes the slot and the other is
+journaled as a `crowded_out` stand-down — so the cost of sharing a book is a
+number you can read, not a strategy that mysteriously went quiet.

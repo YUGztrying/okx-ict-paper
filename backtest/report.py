@@ -10,6 +10,7 @@ condition that is blocking, which forward-testing takes weeks to reveal.
 
 from __future__ import annotations
 
+from collections import Counter
 from datetime import datetime, timezone
 
 from backtest.engine import Result
@@ -130,6 +131,16 @@ def render(result: Result) -> str:
     else:
         lines.append("  no closed trade")
 
+    if len({t.book for t in result.trades}) > 1 or result.crowded_out:
+        # A desk run: two models, one slot. Who filled it, and who was passed
+        # over — the number the single-book decision costs the rarer strategy.
+        taken = Counter(t.book for t in result.trades)
+        lines.append("  par strategie:")
+        for name in sorted(set(taken) | set(result.crowded_out)):
+            lines.append(
+                f"    {name:<12} {taken.get(name, 0):>5} pris"
+                f"  ·  {result.crowded_out.get(name, 0)} ecartes (crowded out)"
+            )
     if result.vetoes:
         lines.append("  blocked by:")
         for name, count in result.vetoes.most_common():

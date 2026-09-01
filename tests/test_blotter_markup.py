@@ -32,7 +32,7 @@ class BlotterMarkup(unittest.TestCase):
         header, _, rest = HTML.partition('<header class="topbar">')
         self.assertTrue(rest)
         block = rest.split("</header>", 1)[0]
-        self.assertNotIn('data-book="ict"', block)
+        self.assertNotIn('data-strategy="ict"', block)
         self.assertIn('id="books"', rest.split("</header>", 1)[1][:400])
 
     def test_open_size_and_live_mark_hooks(self) -> None:

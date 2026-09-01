@@ -80,7 +80,7 @@ class ScanOncePerBar(unittest.TestCase):
             self.addCleanup(p.stop)
 
     def _stand_downs(self) -> int:
-        return sum(len([e for e in journal._parse_lines(b) if e["type"] == "stand_down"]) for b in ("ict", "fabio"))
+        return len([e for e in journal._parse_lines() if e["type"] == "stand_down"])
 
     def test_second_trigger_for_the_same_bar_does_nothing(self) -> None:
         seen: dict[str, int] = {}
