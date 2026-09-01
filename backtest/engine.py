@@ -21,13 +21,14 @@ desk's live rule: a print through both is a loss, not a lucky win.
 from __future__ import annotations
 
 from bisect import bisect_right
+from random import Random
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Callable
 
 from fabio.model import analyze as analyze_fabio
-from ict.model import Fiche, analyze as analyze_ict
+from ict.model import Check, Fiche, analyze as analyze_ict
 from ict.fees import Fees, net_rr, round_trip
 from ict.okx_data import Candle, bar_ms
 from ict.sizing import leverage, position_size
@@ -115,7 +116,42 @@ def _fabio(inst_id: str, last: float, hourly: list[Candle], entry: list[Candle],
     return analyze_fabio(inst_id, last, entry, min_rr=float(cfg.get("fabio_min_rr", 1.5)), now=now)
 
 
-BOOKS: dict[str, Callable[..., Fiche]] = {"ict": _ict, "fabio": _fabio}
+def _random(inst_id: str, last: float, hourly: list[Candle], entry: list[Candle],
+            cfg: dict, now: datetime) -> Fiche:
+    """The null hypothesis: a coin flip with the desk's geometry.
+
+    Every other book here answers "how much does this strategy make". This one
+    answers the question underneath it — does the entry logic do anything at
+    all. It takes the same stop distance, the same reward-to-risk, the same
+    sizing and the same guards, and picks the direction at random.
+
+    The arithmetic says a random entry with a target R times the stop should
+    win about 1/(1+R) of the time, so a strategy landing on that number is
+    indistinguishable from this. But that argument assumes a driftless walk and
+    ignores the session filter, the stop-first intrabar rule and the fee model.
+    Running the control measures what the argument only asserts.
+
+    Seeded from the bar, so a re-run gives the same answer and two books can be
+    compared rather than re-rolled.
+    """
+    bar = entry[-1]
+    rng = Random(f"{inst_id}:{bar.ts}")
+    px = float(bar.close)
+    stop_pct = float(cfg.get("random_stop_pct", 0.005))
+    rr = float(cfg.get("random_rr", 2.0))
+    long = rng.random() < 0.5
+    risk = px * stop_pct
+    fiche = Fiche(inst_id=inst_id, last=px, bias="long" if long else "short")
+    fiche.checks.append(Check("coin_flip", True, f"{'long' if long else 'short'} · stop {stop_pct:.2%}"))
+    fiche.reasons.append(f"coin flip · stop {stop_pct:.2%} · R:R {rr:.2f}")
+    fiche.entry = px
+    fiche.stop = px - risk if long else px + risk
+    fiche.target = px + rr * risk if long else px - rr * risk
+    fiche.rr = rr
+    return fiche
+
+
+BOOKS: dict[str, Callable[..., Fiche]] = {"ict": _ict, "fabio": _fabio, "random": _random}
 # The desk trades one book: both models read the bar, one of them gets the slot.
 DESK = ("ict", "fabio")
 

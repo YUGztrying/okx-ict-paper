@@ -24,6 +24,14 @@ fabio_min_rr = 1.5
 # value, not a truth: run the sweep and set it from what it costs.
 max_leverage = 5.0
 
+# The coin-flip control (`python -m backtest run --book random`). Same stop
+# geometry, same sizing, same guards, direction picked at random. It answers the
+# question under every other number: does the entry logic do anything at all.
+# Set these to whatever the real books actually take — the 365d replay put the
+# median stop at 0.47% (BTC) / 0.58% (ETH) and the realised R:R at 2.58.
+random_stop_pct = 0.005
+random_rr = 2.0
+
 # The loss breaker is a cooldown, not a ban. It used to clear only on a win,
 # and a halted strategy can never win: in the 365d replay Fabio took 5 losses
 # on BTC and was blocked for the remaining 33,721 bars. After this many hours

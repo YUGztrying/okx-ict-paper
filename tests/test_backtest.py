@@ -9,6 +9,7 @@ pinned here.
 from __future__ import annotations
 
 import json
+import random
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
@@ -319,6 +320,68 @@ class DeskBook(unittest.TestCase):
             desk = run("desk", "BTC-USDT-SWAP", entry, hourly, CFG)
             apart = sum(len(run(b, "BTC-USDT-SWAP", entry, hourly, CFG).trades) for b in ("ict", "fabio"))
         self.assertLess(len(desk.trades), apart)
+
+
+
+class CoinFlipControl(unittest.TestCase):
+    """The control has to be a control.
+
+    Every other book answers "how much does this strategy make". This one
+    answers the question underneath: does the entry logic do anything at all.
+    That only means something if the control itself is a fair coin with the
+    desk's geometry, so those properties are pinned here.
+    """
+
+    CFG = dict(CFG, random_stop_pct=0.005, random_rr=2.0, loss_cooldown_hours=24)
+
+    def _walk(self, seed: int, n: int = 3000) -> list[Candle]:
+        rng = random.Random(seed)
+        px, rows = 79000.0, []
+        for i in range(n):
+            px *= 1 + rng.gauss(0, 0.002)
+            rows.append(Candle(ts=i * BAR_MS, open=px, high=px * 1.003,
+                               low=px * 0.997, close=px, volume=10))
+        return rows
+
+    def _run(self, cfg=None):
+        entry = self._walk(4)
+        hourly = series(400, HOUR_MS)
+        return run("random", "BTC-USDT-SWAP", entry, hourly, cfg or self.CFG)
+
+    def test_the_same_bars_give_the_same_trades(self) -> None:
+        """Seeded from the bar, so two books can be compared, not re-rolled."""
+        a, b = self._run(), self._run()
+        self.assertTrue(a.trades)
+        self.assertEqual([(t.opened_ts, t.bias, t.entry, t.stop) for t in a.trades],
+                         [(t.opened_ts, t.bias, t.entry, t.stop) for t in b.trades])
+
+    def test_it_actually_flips(self) -> None:
+        res = self._run()
+        longs = sum(1 for t in res.trades if t.bias == "long")
+        self.assertGreater(longs, 0)
+        self.assertLess(longs, len(res.trades))
+        self.assertAlmostEqual(longs / len(res.trades), 0.5, delta=0.15)
+
+    def test_it_borrows_the_desk_geometry(self) -> None:
+        res = self._run()
+        for t in res.trades:
+            self.assertAlmostEqual(t.stop_pct, 0.005, places=6)
+            self.assertAlmostEqual(abs(t.target - t.entry) / abs(t.entry - t.stop), 2.0, places=6)
+
+    def test_a_wider_target_is_hit_less_often(self) -> None:
+        """1/(1+R) falling as R grows is the whole reason R:R is not free."""
+        near = self._run(dict(self.CFG, random_rr=1.0))
+        far = self._run(dict(self.CFG, random_rr=4.0))
+        rate = lambda r: sum(1 for t in r.closed if t.result == "win") / len(r.closed)
+        self.assertGreater(rate(near), rate(far))
+
+    def test_the_control_never_flatters_itself(self) -> None:
+        """A bar covering stop and target counts as a loss, so the measured rate
+        sits at or below 1/(1+R). The real books carry the same drag, which is
+        why comparing them to this is fair."""
+        res = self._run()
+        won = sum(1 for t in res.closed if t.result == "win") / len(res.closed)
+        self.assertLessEqual(won, 1 / (1 + 2.0) + 0.02)
 
 
 if __name__ == "__main__":
