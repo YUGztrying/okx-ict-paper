@@ -418,6 +418,23 @@
     // capped, so stand-downs used to push real trades out of the P&L within hours.
     const tradesOf = (d) => (d.trades ? d.trades : (d.feed || []).filter((e) => e.type === "paper_close").slice().reverse());
 
+    // History must not lose a trade. feed is capped at 40 lines and stand-downs
+    // fill it within hours, so fills and closes come from the uncapped trades
+    // list; vetoes and errors come from the feed, where recent is enough.
+    const historyRows = (d) => {
+      const seen = new Set();
+      const rows = [];
+      const push = (e) => {
+        const key = `${e.logged_at}|${e.type}|${e.inst_id}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        rows.push(e);
+      };
+      (d.trades || []).forEach(push);
+      (d.feed || []).forEach(push);
+      return rows.sort((a, b) => String(b.logged_at || "").localeCompare(String(a.logged_at || "")));
+    };
+
     function analytics() {
       const closes = tradesOf(DATA).filter((e) => e.type === "paper_close");
       const wins = closes.filter((e) => e.result === "win");
@@ -814,7 +831,7 @@
         ? recents.map(recentItem).join("")
         : `<p class="empty">No fills yet. ${DATA.stats?.stand_downs || 0} vetos are in History.</p>`;
 
-      const rows = (DATA.feed || []).filter(matches);
+      const rows = historyRows(DATA).filter(matches);
       if (!rows.length) {
         document.getElementById("history").innerHTML = `<p class="empty">Nothing in this filter.</p>`;
       } else {

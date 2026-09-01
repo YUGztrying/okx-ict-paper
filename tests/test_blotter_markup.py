@@ -42,6 +42,21 @@ class BlotterMarkup(unittest.TestCase):
         self.assertIn("data-live-pnl", HTML)
         self.assertIn("Notional", HTML)
 
+    def test_history_does_not_read_the_capped_feed(self) -> None:
+        """A trade must stay visible in History forever.
+
+        feed is capped at 40 lines and stand-downs fill it within hours, so a
+        real fill scrolled out of History while the P&L above it still counted
+        it — the page contradicted itself.
+        """
+        self.assertIn("const historyRows", HTML)
+        self.assertIn("historyRows(DATA).filter(matches)", HTML)
+        self.assertNotIn("(DATA.feed || []).filter(matches)", HTML)
+
+    def test_pnl_and_recent_read_the_full_trade_list(self) -> None:
+        self.assertIn("tradesOf(DATA).filter", HTML)
+        self.assertNotIn('(DATA.feed || []).filter((e) => e.type === "paper_close").reverse()', HTML)
+
     def test_settings_describe_the_desk_loop(self) -> None:
         self.assertIn("confirmed 15m close", HTML)
         self.assertIn("First last-print through stop or target", HTML)
