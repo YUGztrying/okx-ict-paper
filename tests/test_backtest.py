@@ -384,5 +384,55 @@ class CoinFlipControl(unittest.TestCase):
         self.assertLessEqual(won, 1 / (1 + 2.0) + 0.02)
 
 
+
+class Significance(unittest.TestCase):
+    """A backtest that reports an average without its error invites reading
+    noise as edge. Four trades at +1.17 R carry an error of +/-1.25 R — the
+    uncertainty is larger than the estimate."""
+
+    def _book(self, n: int, wr: float, rr: float, seed: int = 1) -> Result:
+        res = Result(book="x", inst_id="BTC-USDT-SWAP")
+        rng = random.Random(seed)
+        outcomes = ["win"] * round(n * wr) + ["loss"] * (n - round(n * wr))
+        rng.shuffle(outcomes)
+        for i, o in enumerate(outcomes):
+            t = Trade(inst_id="BTC-USDT-SWAP", book="x", bias="long", entry=100.0,
+                      stop=99.5, target=100 + rr * 0.5, rr=rr, opened_ts=i,
+                      qty=100.0, risk_usd=50.0, stop_pct=0.005)
+            t.result, t.r, t.closed_ts, t.r_net = o, (rr if o == "win" else -1.0), i, None
+            res.trades.append(t)
+        return res
+
+    def test_four_trades_prove_nothing(self) -> None:
+        m = metrics(self._book(4, 0.5, 3.34))
+        self.assertAlmostEqual(m["expectancy_r"], 1.17, places=2)
+        self.assertGreater(m["se_r"], abs(m["expectancy_r"]))   # error beats the estimate
+        self.assertLess(abs(m["t_stat"]), 2)
+        self.assertIn("INDISTINGUABLE", render(self._book(4, 0.5, 3.34)))
+
+    def test_four_hundred_coin_flips_prove_nothing_either(self) -> None:
+        m = metrics(self._book(400, 0.273, 2.56))
+        self.assertLess(abs(m["t_stat"]), 2)
+        # An effect this small needs a sample no desk will ever collect.
+        self.assertGreater(m["n_for_significance"], 5000)
+
+    def test_a_real_effect_is_called_significant(self) -> None:
+        """The verdict is not rigged to always say no."""
+        m = metrics(self._book(500, 0.60, 2.0))
+        self.assertGreater(m["t_stat"], 2)
+        self.assertIn("significatif", render(self._book(500, 0.60, 2.0)))
+
+    def test_the_error_shrinks_with_the_square_root_of_n(self) -> None:
+        small = metrics(self._book(100, 0.3, 2.0, seed=7))
+        large = metrics(self._book(1600, 0.3, 2.0, seed=7))
+        self.assertAlmostEqual(small["se_r"] / large["se_r"], 4.0, delta=0.6)
+
+    def test_one_trade_has_no_error_to_report(self) -> None:
+        m = metrics(self._book(1, 1.0, 2.0))
+        self.assertEqual(m["se_r"], 0.0)
+        self.assertIsNone(m["t_stat"])
+        self.assertIn("pas assez de trades", render(self._book(1, 1.0, 2.0)))
+
+
 if __name__ == "__main__":
     unittest.main()
