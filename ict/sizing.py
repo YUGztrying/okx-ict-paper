@@ -18,16 +18,43 @@ def position_size(
     *,
     equity: float = DEFAULT_EQUITY,
     risk_pct: float = DEFAULT_RISK_PCT,
+    spec: Any = None,
 ) -> dict[str, float]:
+    """Size from stop distance, then snap to what the exchange will accept.
+
+    Without a spec this returns the fractional size, which is fine for a
+    what-if. With one, the size is rounded DOWN to whole contracts, and
+    `risk_usd_actual` reports what that rounding really puts at risk —
+    `risk_usd` stays the amount that was intended. The two differ, and a record
+    that only keeps the intended one quietly mis-states every R it computes.
+    """
     risk = risk_usd(equity, risk_pct)
     dist = abs(float(entry) - float(stop))
     qty = (risk / dist) if dist else 0.0
-    return {
+    out = {
         "risk_usd": risk,
         "qty": qty,
         "notional": qty * float(entry),
         "stop_dist": dist,
+        "risk_usd_actual": risk,
     }
+    if spec is None:
+        return out
+
+    from ict.instruments import base_qty, contracts_for
+
+    lots = contracts_for(qty, spec)
+    filled = base_qty(lots, spec)
+    out.update(
+        {
+            "contracts": lots,
+            "qty": filled,
+            "notional": filled * float(entry),
+            "risk_usd_actual": filled * dist,
+            "ct_val": spec.ct_val,
+        }
+    )
+    return out
 
 
 def unrealized(bias: str, entry: float, last: float, qty: float) -> float:
