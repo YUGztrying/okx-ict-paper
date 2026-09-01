@@ -434,5 +434,58 @@ class Significance(unittest.TestCase):
         self.assertIn("pas assez de trades", render(self._book(1, 1.0, 2.0)))
 
 
+
+class IntrabarBracket(unittest.TestCase):
+    """A 15m bar says where price went, not in what order.
+
+    When its range covers stop and target, the rule chosen decides the trade.
+    The desk's live rule is stop-first, so that stays the default — a backtest
+    must never flatter itself. But the live desk sits a tick stream and sees
+    the real order, so it lands somewhere above that floor. Running both ends
+    says how wide the unknown is.
+    """
+
+    def _spanning(self, bias: str) -> Candle:
+        """One bar covering both 95 and 110."""
+        return Candle(ts=0, open=100, high=110, low=95, close=100, volume=1)
+
+    def test_a_spanning_bar_is_a_loss_by_default(self) -> None:
+        bar = self._spanning("long")
+        self.assertEqual(bar_exit("long", bar, stop=95, target=110), "loss")
+        self.assertEqual(bar_exit("short", bar, stop=110, target=95), "loss")
+
+    def test_the_other_end_of_the_bracket_calls_it_a_win(self) -> None:
+        bar = self._spanning("long")
+        self.assertEqual(bar_exit("long", bar, 95, 110, favour="target"), "win")
+        self.assertEqual(bar_exit("short", bar, 110, 95, favour="target"), "win")
+
+    def test_an_unambiguous_bar_reads_the_same_either_way(self) -> None:
+        """Only a bar touching both levels is ambiguous. Nothing else moves."""
+        only_stop = Candle(ts=0, open=100, high=101, low=90, close=95, volume=1)
+        only_target = Candle(ts=0, open=100, high=120, low=99, close=115, volume=1)
+        neither = Candle(ts=0, open=100, high=101, low=99, close=100, volume=1)
+        for favour in ("stop", "target"):
+            self.assertEqual(bar_exit("long", only_stop, 95, 110, favour=favour), "loss")
+            self.assertEqual(bar_exit("long", only_target, 95, 110, favour=favour), "win")
+            self.assertIsNone(bar_exit("long", neither, 95, 110, favour=favour))
+
+    def test_the_optimistic_end_never_scores_worse(self) -> None:
+        entry = series(400, BAR_MS)
+        hourly = series(300, HOUR_MS)
+        model = lambda inst, *a, **k: self._fiche(inst)
+        with patch.dict("backtest.engine.BOOKS", {"ict": model}):
+            floor = run("ict", "BTC-USDT-SWAP", entry, hourly, dict(CFG, intrabar="stop"))
+            ceiling = run("ict", "BTC-USDT-SWAP", entry, hourly, dict(CFG, intrabar="target"))
+        wins = lambda r: sum(1 for t in r.closed if t.result == "win")
+        self.assertGreaterEqual(wins(ceiling), wins(floor))
+
+    def _fiche(self, inst_id):
+        f = Fiche(inst_id=inst_id, last=100.0, bias="long")
+        f.checks.append(Check("all", True, "stub"))
+        f.entry, f.stop, f.target = 100.0, 99.0, 102.0
+        f.rr = 2.0
+        return f
+
+
 if __name__ == "__main__":
     unittest.main()

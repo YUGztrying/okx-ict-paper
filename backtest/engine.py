@@ -80,22 +80,34 @@ class Result:
         return [t for t in self.trades if t.result]
 
 
-def bar_exit(bias: str, bar: Candle, stop: float, target: float) -> str | None:
+def bar_exit(bias: str, bar: Candle, stop: float, target: float,
+             favour: str = "stop") -> str | None:
     """Did this bar take the position out, and how?
 
-    The stop is tested first. Within one 15m bar we cannot know whether price
-    reached the stop or the target first, so the adverse one wins — the same
-    conservative rule ict/exits.py applies to a print through both levels.
+    A 15m bar says where price went, not in what order. When its range covers
+    both levels, the answer is unknowable from this data and the rule chosen
+    decides the trade. Two rules bracket the truth:
+
+      "stop"    the adverse level wins. The desk's live rule for a print
+                through both, and the honest default for a backtest — it can
+                never flatter a result.
+      "target"  the favourable level wins. Not a claim about reality: it is
+                the other end of the bracket.
+
+    The live desk sits a tick stream, so it sees the real order and lands
+    somewhere between the two. Running both says how wide that somewhere is —
+    if a strategy loses under both, the ambiguity was never the question.
     """
+    high_first = favour == "target"
     if (bias or "").lower() == "short":
-        if bar.high >= stop:
-            return "loss"
-        if bar.low <= target:
-            return "win"
-        return None
-    if bar.low <= stop:
+        hit_stop, hit_target = bar.high >= stop, bar.low <= target
+    else:
+        hit_stop, hit_target = bar.low <= stop, bar.high >= target
+    if hit_stop and hit_target:
+        return "win" if high_first else "loss"
+    if hit_stop:
         return "loss"
-    if bar.high >= target:
+    if hit_target:
         return "win"
     return None
 
@@ -186,6 +198,7 @@ def run(
     width = bar_ms(entry_bar)
     htf_width = bar_ms(htf_bar)
     fees = fees or Fees.from_config(cfg, inst_id)
+    favour = str(cfg.get("intrabar", "stop"))
 
     htf_ts = [c.ts for c in hourly_bars]
     result = Result(book=book, inst_id=inst_id)
@@ -211,7 +224,7 @@ def run(
 
         # A position opened at an earlier close can be taken out by this bar.
         if position is not None:
-            hit = bar_exit(position.bias, bar, position.stop, position.target)
+            hit = bar_exit(position.bias, bar, position.stop, position.target, favour)
             position.bars_held += 1
             if hit:
                 risk = abs(position.entry - position.stop)

@@ -81,6 +81,12 @@ VARIANTS: list[tuple[str, dict]] = [
     ("levier <= 2x", {"max_leverage": 2.0}),
     ("ordres limites (maker)", {"fees": {"taker_pct": 0.02, "maker_pct": 0.02}}),
     ("pas de disjoncteur", {"loss_cooldown_hours": 0}),
+    # The other end of the intrabar bracket. The live desk sits a tick stream
+    # and lands between this row and "actuel"; if both lose, the ambiguity was
+    # never what decided the result.
+    ("sorties optimistes", {"intrabar": "target"}),
+    ("optimiste + maker", {"intrabar": "target",
+                           "fees": {"taker_pct": 0.02, "maker_pct": 0.02}}),
     ("tout combine", {"min_rr_on_net": True, "max_leverage": 3.0,
                       "fees": {"taker_pct": 0.02, "maker_pct": 0.02}}),
 ]
