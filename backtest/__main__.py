@@ -4,7 +4,8 @@
     python -m backtest fetch --days 180
     python -m backtest run --book desk          # the shared book: one slot per bar
     python -m backtest run --book ict           # one model in isolation
-    python -m backtest run --book both --inst BTC-USDT-SWAP
+    python -m backtest run --book random        # the coin-flip control
+    python -m backtest run --book all           # every book, control included
     python -m backtest sweep                    # what each setting costs
 
 `fetch` needs network access to OKX (public endpoints, no key). `run` works
@@ -52,6 +53,8 @@ def cmd_run(args: argparse.Namespace, cfg: dict) -> int:
     # history counted twice — useful for comparing the models, not for sizing
     # an account.
     books = ("desk", "ict", "fabio") if args.book == "both" else (args.book,)
+    if args.book == "all":
+        books = ("desk", "ict", "fabio", "random")
     instruments = args.inst or cfg["instruments"]
     missing = False
     for inst in instruments:
@@ -144,8 +147,10 @@ def main() -> int:
     f.set_defaults(func=cmd_fetch)
 
     r = sub.add_parser("run", parents=[common], help="replay from the cache")
-    r.add_argument("--book", choices=("desk", "ict", "fabio", "both"), default="both",
-                   help="desk = the shared book (default view includes it)")
+    r.add_argument("--book", choices=("desk", "ict", "fabio", "random", "both", "all"),
+                   default="both",
+                   help="desk = the shared book · random = the coin-flip control · "
+                        "all = every book including the control")
     r.set_defaults(func=cmd_run)
 
     w = sub.add_parser("sweep", parents=[common],

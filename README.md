@@ -51,6 +51,13 @@ strategy can never win), and `min_rr_on_net` (the R:R gate applied to the
 number the account actually receives). `python -m backtest sweep` prints what
 each one costs before you turn it on.
 
+`python -m backtest run --book random` is the control: a coin flip with the
+desk's own stop distance, reward-to-risk, sizing and guards. Every other book
+answers "how much does this strategy make"; this one answers the question
+underneath — does the entry logic do anything at all. A random entry targeting
+R times its stop wins about 1/(1+R) of the time, so a book landing on that
+number is indistinguishable from the control.
+
 One position per coin, whichever strategy found it. When both fire on the same
 bar the better reward-to-risk **after fees** takes the slot and the other is
 journaled as a `crowded_out` stand-down — so the cost of sharing a book is a
