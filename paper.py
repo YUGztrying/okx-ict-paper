@@ -15,6 +15,7 @@ from ict.journal import (
     absorb_legacy,
     append,
     consecutive_losses,
+    hours_since_last_close,
     load_open,
     save_open,
     stats,
@@ -105,7 +106,19 @@ def blocked_reason(fiche: Fiche, cfg: dict, open_state: dict, strategy: str) -> 
 
     losses = consecutive_losses(fiche.inst_id, strategy)
     if losses >= int(cfg["max_consecutive_losses"]):
-        return "loss_streak", [f"streak={losses}"]
+        # A cooldown, not a ban. The old check only reset on a win, and a
+        # halted strategy can never win — the backtest showed Fabio blocked on
+        # BTC for 33,721 consecutive bars, the rest of the year, after five
+        # losses. Once the cooldown lapses one trade is allowed through; if it
+        # loses, the streak is longer and the clock restarts.
+        cooldown = float(cfg.get("loss_cooldown_hours", 24))
+        age = hours_since_last_close(fiche.inst_id, strategy)
+        if age is None:
+            # The streak is real but its clock is unreadable. A safety device
+            # fails closed: keep standing down rather than trade blind.
+            return "loss_streak", [f"streak={losses}", "date du dernier trade illisible"]
+        if age < cooldown:
+            return "loss_streak", [f"streak={losses}", f"reprise dans {cooldown - age:.1f}h"]
     if not fiche.passed:
         return "vetoed", []
     return None
@@ -149,6 +162,28 @@ def build_position(fiche: Fiche, cfg: dict, strategy: str) -> dict | None:
         ),
     }
     return pos if pos.get("qty") else None
+
+
+def position_veto(pos: dict, cfg: dict, strategy: str) -> tuple[str, list[str]] | None:
+    """Gates that need the priced, sized order — so they run after rounding.
+
+    Both are the same arithmetic seen from two sides. A stop distance decides
+    the leverage (`risk_pct / stop_pct`) and it decides what the fees cost in R
+    (`2 * rate / stop_pct`). A stop tight enough to look attractive is a stop
+    tight enough to be unaffordable.
+    """
+    lev = float(pos.get("leverage") or 0.0)
+    cap = float(cfg.get("max_leverage", 0) or 0)
+    if cap and lev > cap:
+        return "stop_too_tight", [f"levier {lev:.1f}x > {cap:.1f}x max (stop "
+                                  f"{100 * pos['stop_dist'] / pos['entry']:.2f}%)"]
+    if cfg.get("min_rr_on_net"):
+        floor = float(cfg["min_rr"] if strategy == "ict" else cfg.get("fabio_min_rr", 1.5))
+        if float(pos.get("rr_net") or 0.0) < floor:
+            return "rr_net_below_min", [f"R:R net {pos['rr_net']:.2f} < {floor:.2f} "
+                                        f"(brut {float(pos['rr'] or 0.0):.2f}, "
+                                        f"frais {pos['fee_r_est']:.2f} R)"]
+    return None
 
 
 def stand_down(fiche: Fiche, strategy: str, missing: list[str], extra: list[str] | None = None) -> None:
@@ -212,6 +247,12 @@ def arbitrate(candidates: list[tuple[str, Fiche]], cfg: dict) -> None:
         if pos is None:
             stand_down(fiche, strategy, ["below_min_size"])
             print(f"[{strategy}] {fiche.inst_id}: stand down — size rounds to zero contracts")
+            continue
+        vetoed = position_veto(pos, cfg, strategy)
+        if vetoed:
+            reason, extra = vetoed
+            stand_down(fiche, strategy, [reason], extra)
+            print(f"[{strategy}] {fiche.inst_id}: stand down — {reason}: {'; '.join(extra)}")
             continue
         ready.append((strategy, fiche, pos))
 

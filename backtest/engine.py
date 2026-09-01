@@ -30,7 +30,7 @@ from fabio.model import analyze as analyze_fabio
 from ict.model import Fiche, analyze as analyze_ict
 from ict.fees import Fees, net_rr, round_trip
 from ict.okx_data import Candle, bar_ms
-from ict.sizing import position_size
+from ict.sizing import leverage, position_size
 
 
 @dataclass
@@ -141,6 +141,10 @@ def run(
     entry_limit = int(cfg.get("entry_limit", 96))
     htf_limit = int(cfg.get("htf_limit", 240))
     max_losses = int(cfg.get("max_consecutive_losses", 5))
+    cooldown_ms = float(cfg.get("loss_cooldown_hours", 24)) * 3_600_000
+    max_lev = float(cfg.get("max_leverage", 0) or 0)
+    on_net = bool(cfg.get("min_rr_on_net"))
+    floors = {"ict": float(cfg.get("min_rr", 2.0)), "fabio": float(cfg.get("fabio_min_rr", 1.5))}
     equity = float(cfg.get("default_equity_usdt", 10000))
     risk_pct = float(cfg.get("risk_pct", 0.5))
     width = bar_ms(entry_bar)
@@ -151,6 +155,7 @@ def run(
     result = Result(book=book, inst_id=inst_id)
     position: Trade | None = None
     streak = 0
+    halted_at: int | None = None   # when the loss breaker last tripped
 
     # Enough closed bars must exist on both timeframes before the first decision.
     start = entry_limit
@@ -185,12 +190,15 @@ def run(
                 if position.risk_usd:
                     position.r_net = (position.pnl - position.fee) / position.risk_usd
                 streak = streak + 1 if hit == "loss" else 0
+                halted_at = bar.ts if streak >= max_losses else None
                 position = None
 
         if position is not None:
             result.skipped["already_open"] += 1
             continue
-        if streak >= max_losses:
+        # A cooldown, not a ban: the old check only cleared on a win, and a
+        # halted book can never win. It blocked Fabio on BTC for 33,721 bars.
+        if streak >= max_losses and halted_at is not None and bar.ts - halted_at < cooldown_ms:
             result.skipped["loss_streak"] += 1
             continue
 
@@ -216,6 +224,14 @@ def run(
                 continue
             if not (fiche.entry and fiche.stop and fiche.target):
                 result.skipped["incomplete_levels"] += 1
+                continue
+            lev = leverage(float(fiche.entry), float(fiche.stop), risk_pct)
+            if max_lev and lev > max_lev:
+                result.skipped["stop_too_tight"] += 1
+                continue
+            if on_net and net_rr(float(fiche.entry), float(fiche.stop),
+                                 float(fiche.target), fees.taker) < floors.get(name, 0.0):
+                result.skipped["rr_net_below_min"] += 1
                 continue
             ready.append((name, fiche))
 

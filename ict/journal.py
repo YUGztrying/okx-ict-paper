@@ -133,6 +133,27 @@ def consecutive_losses(inst_id: str, strategy: str | None = None,
     return streak
 
 
+def hours_since_last_close(inst_id: str, strategy: str | None = None,
+                           events: list[dict[str, Any]] | None = None,
+                           now: datetime | None = None) -> float | None:
+    """Age of the most recent close on this instrument, or None if there is
+    none. The loss breaker uses it to expire instead of latching forever."""
+    source = _parse_lines() if events is None else events
+    for event in reversed(source):
+        if event.get("inst_id") != inst_id or event.get("type") != "paper_close":
+            continue
+        if strategy is not None and event.get("strategy") != strategy:
+            continue
+        try:
+            when = datetime.fromisoformat(event["logged_at"])
+        except (KeyError, ValueError):
+            return None
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=timezone.utc)
+        return ((now or datetime.now(timezone.utc)) - when).total_seconds() / 3600.0
+    return None
+
+
 def stats_from(events: list[dict[str, Any]]) -> dict[str, Any]:
     """Counters over the whole journal. Open positions live on the snapshot, not
     here — one copy per payload."""

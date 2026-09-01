@@ -12,8 +12,23 @@ one_position_per_asset = true
 instruments = ["BTC-USDT-SWAP", "ETH-USDT-SWAP"]
 
 # Apply min_rr to the reward-to-risk AFTER fees. Off for now: turning it on
-# changes which setups fire, so flip it once the backtest says what it costs.
+# changes which setups fire, so flip it once the backtest says what it costs
+# (`python -m backtest sweep` prints exactly that).
 min_rr_on_net = false
+fabio_min_rr = 1.5
+
+# The stop decides the leverage: leverage = risk_pct / stop_pct. At 0.5% risk a
+# 1% stop is 0.5x and a 0.04% stop is 12.5x — the 365d backtest found ICT taking
+# $131,090 of ETH on a $10,000 account off a 0.04% stop. Nothing in either
+# strategy bounds the stop, so the desk bounds the consequence. A starting
+# value, not a truth: run the sweep and set it from what it costs.
+max_leverage = 5.0
+
+# The loss breaker is a cooldown, not a ban. It used to clear only on a win,
+# and a halted strategy can never win: in the 365d replay Fabio took 5 losses
+# on BTC and was blocked for the remaining 33,721 bars. After this many hours
+# one trade is let through; if it loses, the clock restarts.
+loss_cooldown_hours = 24
 
 # OKX 15m FVG is the entry timeframe. HTF is NY daily + weekly.
 entry_bar = "15m"
