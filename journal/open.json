@@ -27,5 +27,34 @@
     "leverage": 0.4638271970000001,
     "contracts": 18.49,
     "ct_val": 0.1
+  },
+  "BTC-USDT-SWAP": {
+    "bias": "long",
+    "entry": 80800.0,
+    "stop": 80459.1,
+    "target": 81411.9,
+    "rr": 1.7952662944107176,
+    "rr_net": 1.5579,
+    "fee_rate": 0.0005,
+    "fee_r_est": 0.237,
+    "sized_with_spec": true,
+    "risk_pct": 0.5,
+    "opened_at": "2026-09-04T03:00:01.352102+00:00",
+    "reasons": [
+      "session: asia 03h UTC",
+      "profile: 12 session bars (need 4)",
+      "value_area: VAL 80650.00 POC 81026.27 VAH 81411.90",
+      "aaa: AAA long \u00b7 VAL fade / absorption wick",
+      "risk: R:R 1.80 (min 1.5)"
+    ],
+    "strategy": "fabio",
+    "risk_usd": 50.0,
+    "qty": 0.1466,
+    "notional": 11845.28,
+    "stop_dist": 340.8999999999942,
+    "risk_usd_actual": 49.97593999999915,
+    "leverage": 1.184528,
+    "contracts": 14.66,
+    "ct_val": 0.01
   }
 }
