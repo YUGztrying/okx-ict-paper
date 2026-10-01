@@ -1,1 +1,60 @@
-{}
+{
+  "BTC-USDT-SWAP": {
+    "bias": "long",
+    "entry": 83462.3,
+    "stop": 82956.8,
+    "target": 84317.0,
+    "rr": 1.6909811568471815,
+    "rr_net": 1.5257,
+    "fee_rate": 0.0005,
+    "fee_r_est": 0.1651,
+    "sized_with_spec": true,
+    "risk_pct": 0.5,
+    "opened_at": "2026-10-01T08:45:01.132516+00:00",
+    "reasons": [
+      "session: london 08h UTC",
+      "profile: 11 session bars (need 4)",
+      "value_area: VAL 83123.10 POC 83550.83 VAH 84317.00",
+      "aaa: AAA long \u00b7 VAL fade / absorption wick",
+      "risk: R:R 1.69 (min 1.5)"
+    ],
+    "strategy": "fabio",
+    "risk_usd": 50.0,
+    "qty": 0.0989,
+    "notional": 8254.421470000001,
+    "stop_dist": 505.5,
+    "risk_usd_actual": 49.99395,
+    "leverage": 0.8254421470000001,
+    "contracts": 9.89,
+    "ct_val": 0.01
+  },
+  "ETH-USDT-SWAP": {
+    "bias": "long",
+    "entry": 2681.87,
+    "stop": 2666.65,
+    "target": 2713.35,
+    "rr": 2.06914683843829,
+    "rr_net": 1.8921,
+    "fee_rate": 0.0005,
+    "fee_r_est": 0.1762,
+    "sized_with_spec": true,
+    "risk_pct": 0.5,
+    "opened_at": "2026-10-01T08:45:01.494175+00:00",
+    "reasons": [
+      "session: london 08h UTC",
+      "profile: 11 session bars (need 4)",
+      "value_area: VAL 2672.00 POC 2691.51 VAH 2713.35",
+      "aaa: AAA long \u00b7 VAL fade / absorption wick",
+      "risk: R:R 2.07 (min 1.5)"
+    ],
+    "strategy": "fabio",
+    "risk_usd": 50.0,
+    "qty": 3.285,
+    "notional": 8809.94295,
+    "stop_dist": 15.2199999999998,
+    "risk_usd_actual": 49.99769999999935,
+    "leverage": 0.880994295,
+    "contracts": 32.85,
+    "ct_val": 0.1
+  }
+}
