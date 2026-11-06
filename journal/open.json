@@ -1,1 +1,31 @@
-{}
+{
+  "BTC-USDT-SWAP": {
+    "bias": "short",
+    "entry": 75920.6,
+    "stop": 76267.8,
+    "target": 74800.1,
+    "rr": 3.227888030743493,
+    "rr_net": 3.0086,
+    "fee_rate": 0.0005,
+    "fee_r_est": 0.2187,
+    "sized_with_spec": true,
+    "risk_pct": 0.5,
+    "opened_at": "2026-11-06T17:15:01.004078+00:00",
+    "reasons": [
+      "session: ny 17h UTC",
+      "profile: 17 session bars (need 4)",
+      "value_area: VAL 74800.10 POC 75470.07 VAH 76115.50",
+      "aaa: AAA short \u00b7 VAH fade / absorption wick",
+      "risk: R:R 3.23 (min 1.5)"
+    ],
+    "strategy": "fabio",
+    "risk_usd": 50.0,
+    "qty": 0.14400000000000002,
+    "notional": 10932.566400000002,
+    "stop_dist": 347.1999999999971,
+    "risk_usd_actual": 49.99679999999959,
+    "leverage": 1.0932566400000001,
+    "contracts": 14.4,
+    "ct_val": 0.01
+  }
+}
