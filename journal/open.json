@@ -1,1 +1,31 @@
-{}
+{
+  "ETH-USDT-SWAP": {
+    "bias": "short",
+    "entry": 1949.9,
+    "stop": 1961.42,
+    "target": 1926.66,
+    "rr": 2.0182370820668925,
+    "rr_net": 1.8481,
+    "fee_rate": 0.0005,
+    "fee_r_est": 0.1693,
+    "sized_with_spec": true,
+    "risk_pct": 0.5,
+    "opened_at": "2026-11-13T10:30:01.740443+00:00",
+    "reasons": [
+      "session: london 10h UTC",
+      "profile: 14 session bars (need 4)",
+      "value_area: VAL 1926.66 POC 1950.13 VAH 1957.50",
+      "aaa: AAA short \u00b7 VAH fade / absorption wick",
+      "risk: R:R 2.02 (min 1.5)"
+    ],
+    "strategy": "fabio",
+    "risk_usd": 50.0,
+    "qty": 4.34,
+    "notional": 8462.566,
+    "stop_dist": 11.519999999999982,
+    "risk_usd_actual": 49.99679999999992,
+    "leverage": 0.8462566,
+    "contracts": 43.4,
+    "ct_val": 0.1
+  }
+}
