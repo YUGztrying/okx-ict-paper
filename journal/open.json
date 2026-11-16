@@ -1,1 +1,31 @@
-{}
+{
+  "ETH-USDT-SWAP": {
+    "bias": "long",
+    "entry": 1814.96,
+    "stop": 1795.92,
+    "target": 1866.83,
+    "rr": 2.724402070692618,
+    "rr_net": 2.6289,
+    "fee_rate": 0.0005,
+    "fee_r_est": 0.0953,
+    "sized_with_spec": true,
+    "risk_pct": 0.5,
+    "opened_at": "2026-11-16T15:45:01.771931+00:00",
+    "reasons": [
+      "session: ny 15h UTC",
+      "profile: 11 session bars (need 4)",
+      "value_area: VAL 1799.52 POC 1845.78 VAH 1866.83",
+      "aaa: AAA long \u00b7 VAL fade / absorption wick",
+      "risk: R:R 2.72 (min 1.5)"
+    ],
+    "strategy": "fabio",
+    "risk_usd": 50.0,
+    "qty": 2.6260000000000003,
+    "notional": 4766.084960000001,
+    "stop_dist": 19.039999999999964,
+    "risk_usd_actual": 49.99903999999991,
+    "leverage": 0.4766084960000001,
+    "contracts": 26.26,
+    "ct_val": 0.1
+  }
+}
