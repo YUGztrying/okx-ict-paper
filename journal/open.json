@@ -1,1 +1,32 @@
-{}
+{
+  "BTC-USDT-SWAP": {
+    "bias": "short",
+    "entry": 64663.2,
+    "stop": 65046.3,
+    "target": 63877.2,
+    "rr": 2.052182158481599,
+    "rr_net": 1.8829,
+    "fee_rate": 0.0005,
+    "fee_r_est": 0.1688,
+    "sized_with_spec": true,
+    "risk_pct": 0.5,
+    "opened_at": "2026-11-18T02:14:09.891149+00:00",
+    "reasons": [
+      "htf_bias: short | weekly LH/LL; daily close down 2026-11-17",
+      "draw: PDL 63877.2",
+      "amd: delivery | asia 64264.00-64981.30 swept=True",
+      "session: asia score=3",
+      "pd_array: FVG 64660.50-64666.00 zone=ok",
+      "risk: R:R 2.05 (min 2.0)"
+    ],
+    "strategy": "ict",
+    "risk_usd": 50.0,
+    "qty": 0.1305,
+    "notional": 8438.5476,
+    "stop_dist": 383.1000000000058,
+    "risk_usd_actual": 49.994550000000764,
+    "leverage": 0.84385476,
+    "contracts": 13.05,
+    "ct_val": 0.01
+  }
+}
